@@ -1,0 +1,68 @@
+plugins {
+    alias(libs.plugins.android.application)
+    alias(libs.plugins.kotlin.android)
+}
+
+android {
+    namespace 'com.bconf.a2maps_and'
+    compileSdk 36
+
+    defaultConfig {
+        applicationId "com.bconf.a2maps_and"
+        minSdk 29
+        targetSdk 36
+        versionCode 1
+        versionName "1.0"
+
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
+    }
+    kotlinOptions {
+        jvmTarget = '11'
+    }
+    buildFeatures {
+        viewBinding true
+    }
+}
+
+dependencies {
+
+    implementation libs.androidx.core.ktx
+    implementation libs.androidx.appcompat
+    implementation libs.material
+    implementation libs.androidx.activity
+    implementation libs.androidx.constraintlayout
+    implementation libs.androidx.material3
+    implementation libs.play.services.maps
+    testImplementation libs.junit
+    androidTestImplementation libs.androidx.junit
+    androidTestImplementation libs.androidx.espresso.core
+    implementation 'org.maplibre.gl:android-sdk:11.8.0'
+    implementation 'com.google.android.gms:play-services-location:21.2.0'
+    implementation 'com.google.android.material:material:1.10.0'
+    // Retrofit for networking
+    implementation 'com.squareup.retrofit2:retrofit:2.9.0'
+    implementation 'com.squareup.retrofit2:converter-gson:2.9.0' // Or converter-moshi
+    implementation 'com.squareup.okhttp3:logging-interceptor:4.9.3' // For logging network requests (optional)
+
+    // For decoding Google's Encoded Polyline
+    implementation 'com.google.maps.android:android-maps-utils:2.3.0' // Provides PolyUtil
+
+    // Kotlin Coroutines for background tasks
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3'
+    implementation 'com.mapbox.mapboxsdk:mapbox-sdk-geojson:7.7.0'
+    implementation 'com.mapbox.mapboxsdk:mapbox-sdk-turf:7.7.0'
+    implementation 'androidx.annotation:annotation:1.0.0'
+    implementation 'com.huawei.hms:location:6.12.0.300' // Example version, check for latest
+
+}
