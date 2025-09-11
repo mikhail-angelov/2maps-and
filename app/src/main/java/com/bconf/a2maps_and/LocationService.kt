@@ -3,21 +3,33 @@ package com.bconf.a2maps_and
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.location.Location
 import android.os.Build
 import android.os.IBinder
 import android.os.Looper
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
+import com.bconf.a2maps_and.navigation.NavigationState
+import com.bconf.a2maps_and.routing.Maneuver
+import com.bconf.a2maps_and.routing.ValhallaRouteResponse
 import com.google.android.gms.common.GoogleApiAvailability
-//import androidx.privacysandbox.tools.core.generator.build
-import com.google.android.gms.location.*
+import com.google.gson.Gson
 import com.huawei.hms.api.HuaweiApiAvailability
-import com.huawei.hms.location.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import org.maplibre.android.geometry.LatLng
 
 class LocationService : Service() {
 
@@ -28,6 +40,14 @@ class LocationService : Service() {
     private lateinit var huaweiFusedLocationClient: com.huawei.hms.location.FusedLocationProviderClient
     private lateinit var huaweiLocationCallback: com.huawei.hms.location.LocationCallback
 
+    private val serviceJob = SupervisorJob()
+    // Scope for long-running logic within the service, can be cancelled in onDestroy
+    private val serviceScope = CoroutineScope(Dispatchers.Default + serviceJob)
+
+    // --- Navigation Engine State (Simplified initial version) ---
+    private var originalFullRoutePath: List<LatLng> = emptyList()
+    private var originalManeuvers: List<Maneuver> = emptyList()
+    private var currentSnappedShapeIndex: Int = 0 // Will be used later for trimming
     companion object {
         const val ACTION_START_LOCATION_SERVICE = "ACTION_START_LOCATION_SERVICE"
         const val ACTION_STOP_LOCATION_SERVICE = "ACTION_STOP_LOCATION_SERVICE"
@@ -38,9 +58,27 @@ class LocationService : Service() {
         const val BEARING = "com.bconf.a2maps_and.BEARING"
         const val BEARING_ACCURACY = "com.bconf.a2maps_and.BEARING_ACCURACY"
         private const val NOTIFICATION_CHANNEL_ID = "location_service_channel"
-        private const val SERVICE_ID = 101 // Choose a unique ID
-        private const val LOCATION_UPDATE_INTERVAL = 20000L // 20 seconds
-        private const val FASTEST_LOCATION_INTERVAL = 15000L // 15 seconds
+        private val NOTIFICATION_ID = 101 // Must be > 0
+        private val CHANNEL_ID = "LocationNavigationChannel"
+        private const val LOCATION_UPDATE_INTERVAL = 10000L // 10 seconds
+        private const val FASTEST_LOCATION_INTERVAL = 5000L // 5 seconds
+
+        const val ACTION_START_NAVIGATION = "com.bconf.a2maps_and.action.START_NAVIGATION"
+        const val ACTION_STOP_NAVIGATION = "com.bconf.a2maps_and.action.STOP_NAVIGATION"
+        const val EXTRA_ROUTE_RESPONSE_JSON = "extra_route_response_json"
+        const val EXTRA_FROM_LAT = "extra_from_lat"
+        const val EXTRA_FROM_LON = "extra_from_lon"
+        const val EXTRA_TO_LAT = "extra_to_lat"
+        const val EXTRA_TO_LON = "extra_to_lon"
+
+        private val _currentDisplayedPath = MutableStateFlow<List<LatLng>>(emptyList())
+        val currentDisplayedPath: StateFlow<List<LatLng>> = _currentDisplayedPath.asStateFlow()
+
+        private val _currentManeuver = MutableStateFlow<Maneuver?>(null)
+        val currentManeuver: StateFlow<Maneuver?> = _currentManeuver.asStateFlow()
+
+        val _navigationState = MutableStateFlow(NavigationState.IDLE)
+        val navigationState: StateFlow<NavigationState> = _navigationState.asStateFlow()
     }
 
     override fun onCreate() {
@@ -74,17 +112,25 @@ class LocationService : Service() {
                 override fun onLocationResult(locationResult: com.google.android.gms.location.LocationResult) {
                     locationResult.lastLocation?.let { location ->
                         Log.d(
-                            "LocationService",
-                            "GMS Location: \${location.latitude}, \${location.longitude}"
+                            "Location",
+                            "GMS Location: ${location.latitude}, ${location.longitude}"
                         )
                         // TODO: Handle location update (e.g., save to database, send to server)
+                        onNewLocationLogic(location)
+                        // Send broadcast
+                        val locationIntent = Intent(ACTION_LOCATION_UPDATE)
+                        locationIntent.putExtra(EXTRA_LATITUDE, location.latitude)
+                        locationIntent.putExtra(EXTRA_LONGITUDE, location.longitude)
+                        locationIntent.putExtra(ACCURACY, location.accuracy)
+                        locationIntent.putExtra(BEARING, location.bearing)
+                        locationIntent.putExtra(BEARING_ACCURACY, location.bearingAccuracyDegrees)
+                        LocalBroadcastManager.getInstance(this@LocationService)
+                            .sendBroadcast(locationIntent)
                     }
                 }
             }
-        }
-
-        // Huawei Mobile Services (HMS) Location Callback
-        if (checkHMS()) {
+        } else if (checkHMS()) {
+            // Huawei Mobile Services (HMS) Location Callback
             huaweiLocationCallback = object : com.huawei.hms.location.LocationCallback() {
                 override fun onLocationResult(locationResult: com.huawei.hms.location.LocationResult?) {
                     locationResult?.lastLocation?.let { location ->
@@ -92,6 +138,7 @@ class LocationService : Service() {
                             "LocationService",
                             "HMS Location++++++: ${location.latitude}, ${location.longitude}, ${location.accuracy}, ${location.bearing}, ${location.bearingAccuracyDegrees}"
                         )
+                        onNewLocationLogic(location)
                         // Send broadcast
                         val locationIntent = Intent(ACTION_LOCATION_UPDATE)
                         locationIntent.putExtra(EXTRA_LATITUDE, location.latitude)
@@ -109,19 +156,47 @@ class LocationService : Service() {
 
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        intent?.action?.let {
-            when (it) {
-                ACTION_START_LOCATION_SERVICE -> {
-                    startForegroundServiceWithNotification()
-                    startLocationUpdates()
-                }
-                ACTION_STOP_LOCATION_SERVICE -> {
-                    stopLocationUpdates()
-                    stopForeground(true)
-                    stopSelf()
+        Log.d("LocationService", "onStartCommand, action: ${intent?.action}")
+        val notification = buildNotification("Navigation Service Active")
+        startForeground(NOTIFICATION_ID, notification)
+
+        when (intent?.action) {
+            ACTION_START_NAVIGATION -> {
+                val routeJson = intent.getStringExtra(EXTRA_ROUTE_RESPONSE_JSON)
+                // val fromLat = intent.getDoubleExtra(EXTRA_FROM_LAT, 0.0) // Store these if needed for reroute later
+                // val fromLon = intent.getDoubleExtra(EXTRA_FROM_LON, 0.0)
+                // val toLat = intent.getDoubleExtra(EXTRA_TO_LAT, 0.0)
+                // val toLon = intent.getDoubleExtra(EXTRA_TO_LON, 0.0)
+
+                if (routeJson != null) {
+                    try {
+                        val routeResponse = Gson().fromJson(routeJson, ValhallaRouteResponse::class.java)
+                        startNavigationLogic(routeResponse)
+                        startLocationUpdates()
+                    } catch (e: Exception) {
+                        Log.e("LocationService", "Error parsing route for navigation", e)
+                        _navigationState.value = NavigationState.ROUTE_CALCULATION_FAILED
+                    }
+                } else {
+                    Log.e("LocationService", "Route JSON was null for START_NAVIGATION")
+                    _navigationState.value = NavigationState.ROUTE_CALCULATION_FAILED
                 }
             }
+            ACTION_STOP_NAVIGATION -> {
+                stopNavigationLogic()
+                // stopSelf() will eventually call onDestroy
+            }
+            ACTION_START_LOCATION_SERVICE -> {
+                startForegroundServiceWithNotification()
+                startLocationUpdates()
+            }
+            ACTION_STOP_LOCATION_SERVICE -> {
+                stopLocationUpdates()
+                stopForeground(STOP_FOREGROUND_DETACH)
+                stopSelf()
+            }
         }
+
         return START_STICKY // If the service is killed, restart it
     }
 
@@ -155,23 +230,13 @@ class LocationService : Service() {
         // and you haven't already specified it (though the manifest declaration is preferred).
         // However, the primary fix is the manifest declaration.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(SERVICE_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION)
+            startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION)
         } else {
-            startForeground(SERVICE_ID, notification)
+            startForeground(NOTIFICATION_ID, notification)
         }
     }
 
-    private fun createNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val serviceChannel = NotificationChannel(
-                NOTIFICATION_CHANNEL_ID,
-                "Location Service Channel",
-                NotificationManager.IMPORTANCE_DEFAULT
-            )
-            val manager = getSystemService(NotificationManager::class.java)
-            manager?.createNotificationChannel(serviceChannel)
-        }
-    }
+
 
     private fun startLocationUpdates() {
         if(checkGMS()) {
@@ -224,7 +289,7 @@ class LocationService : Service() {
 
     private fun stopLocationUpdates() {
         try {
-          if(locationCallback != null) {
+          if(checkGMS()) {
               fusedLocationClient.removeLocationUpdates(locationCallback)
               Log.d("LocationService", "GMS location updates stopped.")
           }
@@ -233,12 +298,125 @@ class LocationService : Service() {
         }
 
         try {
-            if(huaweiLocationCallback != null) {
+            if(checkHMS()) {
                 huaweiFusedLocationClient.removeLocationUpdates(huaweiLocationCallback)
                 Log.d("LocationService", "HMS location updates stopped.")
             }
         } catch (e: Exception) {
             Log.e("LocationService", "Could not stop HMS location updates: \${e.message}")
+        }
+    }
+
+    private fun startNavigationLogic(routeResponse: ValhallaRouteResponse) {
+        serviceScope.launch {
+            _navigationState.value = NavigationState.NAVIGATING
+            val shape = routeResponse.trip?.legs?.firstOrNull()?.shape
+            if (shape.isNullOrEmpty()) {
+                Log.w("LocationService", "No shape data in response.")
+                _navigationState.value = NavigationState.ROUTE_CALCULATION_FAILED
+                _currentDisplayedPath.value = emptyList()
+                _currentManeuver.value = null
+                return@launch
+            }
+
+            try {
+                // Ensure com.mapbox.geojson:mapbox-java-core dependency is present for PolylineUtils
+                val decodedMapboxPoints: List<com.mapbox.geojson.Point> =
+                    com.mapbox.geojson.utils.PolylineUtils.decode(shape, 6)
+                originalFullRoutePath = decodedMapboxPoints.map { LatLng(it.latitude(), it.longitude()) }
+            } catch (e: Exception) {
+                Log.e("LocationService", "Error decoding polyline: ${e.message}", e)
+                _navigationState.value = NavigationState.ROUTE_CALCULATION_FAILED
+                return@launch
+            }
+
+            if (originalFullRoutePath.isEmpty()) {
+                Log.w("LocationService", "Decoded path is empty.")
+                _navigationState.value = NavigationState.ROUTE_CALCULATION_FAILED
+                return@launch
+            }
+
+            originalManeuvers = routeResponse.trip?.legs?.firstOrNull()?.maneuvers ?: emptyList()
+            currentSnappedShapeIndex = 0
+
+            _currentDisplayedPath.value = ArrayList(originalFullRoutePath) // Emit full path initially
+            updateCurrentManeuverLogic(currentSnappedShapeIndex) // Show first maneuver
+            Log.d("LocationService", "Navigation started. Full path size: ${originalFullRoutePath.size}")
+        }
+    }
+
+    private fun onNewLocationLogic(location: Location) {
+        if (_navigationState.value != NavigationState.NAVIGATING && _navigationState.value != NavigationState.OFF_ROUTE) {
+            return
+        }
+        if (originalFullRoutePath.size < 2) return
+
+        serviceScope.launch {
+            // Placeholder: For now, just log. Snapping logic will go here.
+            val currentLocationLatLng = LatLng(location.latitude, location.longitude)
+            Log.d("LocationService", "Processing new location for navigation: $currentLocationLatLng")
+
+            // TODO: Implement snapping, path trimming, maneuver update, off-route, arrival
+            // For now, let's keep the full path displayed and update the first maneuver
+            // This is just to ensure data flow is working.
+            _currentDisplayedPath.value = ArrayList(originalFullRoutePath) // Keep showing full path for now
+            updateCurrentManeuverLogic(currentSnappedShapeIndex) // Update based on current (not yet advancing) index
+        }
+    }
+
+    private fun updateCurrentManeuverLogic(currentRoutePointIndex: Int) {
+        val activeManeuver = originalManeuvers.getOrNull(0) // Simplistic: always show the first one for now
+        // A more robust approach would iterate or use begin_shape_index later
+        // val activeManeuver = originalManeuvers.lastOrNull { maneuver ->
+        //    (maneuver.begin_shape_index ?: 0) <= currentRoutePointIndex
+        // }
+        if (_currentManeuver.value != activeManeuver) {
+            _currentManeuver.value = activeManeuver
+        }
+    }
+
+    private fun stopNavigationLogic() {
+        serviceScope.launch {
+            Log.d("LocationService", "Navigation logic stopped.")
+            stopLocationUpdates()
+            originalFullRoutePath = emptyList()
+            originalManeuvers = emptyList()
+            currentSnappedShapeIndex = 0
+            _currentDisplayedPath.value = emptyList()
+            _currentManeuver.value = null
+            _navigationState.value = NavigationState.IDLE
+            stopForeground(true) // Remove notification
+            stopSelf() // Stop the service itself
+        }
+    }
+
+    private fun buildNotification(contentText: String): Notification {
+        val notificationIntent = Intent(this, MainActivity::class.java) // Opens MainActivity on tap
+        val pendingIntentFlags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        } else {
+            PendingIntent.FLAG_UPDATE_CURRENT
+        }
+        val pendingIntent = PendingIntent.getActivity(this, 0, notificationIntent, pendingIntentFlags)
+
+        return NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("A2Maps Navigation")
+            .setContentText(contentText)
+            .setSmallIcon(R.drawable.ic_navigation) // Ensure you have this drawable
+            .setContentIntent(pendingIntent)
+            .setOngoing(true) // Makes the notification non-dismissable by swipe
+            .build()
+    }
+
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val serviceChannel = NotificationChannel(
+                CHANNEL_ID,
+                "Navigation Service Channel",
+                NotificationManager.IMPORTANCE_LOW // Use LOW to avoid sound/vibration for ongoing
+            )
+            val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            manager.createNotificationChannel(serviceChannel)
         }
     }
 
@@ -249,5 +427,7 @@ class LocationService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         stopLocationUpdates()
+        serviceScope.cancel() // Cancel all coroutines started in this scope
+        Log.d("LocationService", "onDestroy")
     }
 }
