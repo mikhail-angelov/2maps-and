@@ -9,25 +9,12 @@
 
     <androidx.fragment.app.FragmentContainerView
         android:id="@+id/mapFragmentContainer"
+        android:name="com.bconf.a2maps_and.MapFragment"
         android:layout_width="0dp"
         android:layout_height="0dp"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
-
-    <!-- The FAB is now constrained to the parent, which is fine -->
-    <com.google.android.material.floatingactionbutton.FloatingActionButton
-        android:id="@+id/fab_show_navigation"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_margin="16dp"
-        android:src="@android:drawable/ic_menu_directions"
-        app:tint="@android:color/white"
-        android:contentDescription="Show Navigation Options"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent" />
-
-    <!-- Removed the old MapView and TextView -->
 
 </androidx.constraintlayout.widget.ConstraintLayout>

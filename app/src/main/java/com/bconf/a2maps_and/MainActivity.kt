@@ -7,7 +7,6 @@ import android.os.Build
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.util.Log
-import android.view.View
 import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -15,49 +14,24 @@ import androidx.core.app.ActivityCompat
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import com.bconf.a2maps_and.navigation.NavigationState
+import com.bconf.a2maps_and.service.NavigationEngineService
 import com.bconf.a2maps_and.ui.viewmodel.NavigationViewModel
 import com.google.android.material.floatingactionbutton.FloatingActionButton
-import com.google.android.material.textview.MaterialTextView
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var navigationViewModel: NavigationViewModel
-    private var maneuverTextView: MaterialTextView? = null // Assuming you have this
-
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         navigationViewModel = ViewModelProvider(this).get(NavigationViewModel::class.java)
-
         setContentView(R.layout.activity_main)
-
-        val fabShowNavigation: FloatingActionButton? = findViewById(R.id.fab_show_navigation)
-        fabShowNavigation?.setOnClickListener {
-            Toast.makeText(this@MainActivity, "State: ${navigationViewModel.navigationState.value}", Toast.LENGTH_LONG).show()
-        }
-
-        if (savedInstanceState == null) {
-            val mapFragment = MapFragment()
-            supportFragmentManager.beginTransaction()
-                .replace(R.id.mapFragmentContainer, mapFragment)
-                .commit()
-        }
         observeViewModel()
     }
 
     private fun observeViewModel() {
-        lifecycleScope.launch {
-            navigationViewModel.maneuverText.collectLatest { text ->
-                if (text.isNotBlank()) {
-                    maneuverTextView?.text = text
-                    maneuverTextView?.visibility = View.VISIBLE
-                } else {
-                    maneuverTextView?.visibility = View.GONE
-                }
-            }
-        }
 
         lifecycleScope.launch {
             navigationViewModel.navigationState.collectLatest { state ->
@@ -80,16 +54,16 @@ class MainActivity : AppCompatActivity() {
             val coarseLocationGranted = permissions.getOrDefault(Manifest.permission.ACCESS_COARSE_LOCATION, false)
 
             if (fineLocationGranted || coarseLocationGranted) {
-//                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-//                    if (permissions.getOrDefault(Manifest.permission.ACCESS_BACKGROUND_LOCATION, false)) {
-//                        startLocationService()
-//                    } else {
-//                        Log.w("Location", "Background location permission denied.")
-//                        Toast.makeText(this, "Background location permission is needed for full functionality.", Toast.LENGTH_LONG).show()
-//                    }
-//                } else {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    if (permissions.getOrDefault(Manifest.permission.ACCESS_BACKGROUND_LOCATION, false)) {
+                        startLocationService()
+                    } else {
+                        Log.w("Location", "Background location permission denied.")
+                        Toast.makeText(this, "Background location permission is needed for full functionality.", Toast.LENGTH_LONG).show()
+                    }
+                } else {
                     startLocationService()
-//                }
+                }
             } else {
                 Log.w("Location", "Location permission denied.")
                 Toast.makeText(this, "Location permissions are required for map functionality.", Toast.LENGTH_LONG).show()
@@ -101,9 +75,9 @@ class MainActivity : AppCompatActivity() {
         permissionsToRequest.add(Manifest.permission.ACCESS_FINE_LOCATION)
         permissionsToRequest.add(Manifest.permission.ACCESS_COARSE_LOCATION)
 
-//        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-//            permissionsToRequest.add(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
-//        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            permissionsToRequest.add(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+        }
 
         val foregroundPermissionsGranted = ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
                 ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
@@ -124,8 +98,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startLocationService() {
-        Intent(this, LocationService::class.java).also {
-            it.action = LocationService.ACTION_START_LOCATION_SERVICE
+        Intent(this, NavigationEngineService::class.java).also {
+            it.action = NavigationEngineService.ACTION_START_LOCATION_SERVICE
 //             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
 //                startForegroundService(it)
 //            } else {
@@ -135,8 +109,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun stopLocationService() {
-        Intent(this, LocationService::class.java).also {
-            it.action = LocationService.ACTION_STOP_LOCATION_SERVICE
+        Intent(this, NavigationEngineService::class.java).also {
+            it.action = NavigationEngineService.ACTION_STOP_LOCATION_SERVICE
             startService(it) 
         }
     }

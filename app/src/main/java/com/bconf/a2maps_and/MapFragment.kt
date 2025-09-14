@@ -1,35 +1,21 @@
 package com.bconf.a2maps_and
 
-import android.content.BroadcastReceiver
 import android.content.Context
-import android.content.Intent
-import android.content.IntentFilter
 import android.graphics.Color
-import android.location.Location
-import android.location.LocationManager
 import android.os.Bundle
 import android.util.Log
-import android.util.TypedValue
 import android.view.ContextMenu
 import android.view.LayoutInflater
 import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
-import android.widget.RelativeLayout
-import android.widget.Toast
+import android.widget.TextView
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
-import androidx.localbroadcastmanager.content.LocalBroadcastManager
-import com.bconf.a2maps_and.databinding.FragmentMapBinding
 import com.bconf.a2maps_and.navigation.NavigationState
-import com.bconf.a2maps_and.routing.RetrofitClient
-import com.bconf.a2maps_and.routing.ValhallaLocation
-import com.bconf.a2maps_and.routing.ValhallaRouteRequest
-import com.bconf.a2maps_and.routing.ValhallaRouteResponse
 import com.bconf.a2maps_and.ui.viewmodel.NavigationViewModel
 import com.google.android.material.textview.MaterialTextView
-import com.mapbox.geojson.utils.PolylineUtils
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import org.json.JSONArray
@@ -54,11 +40,6 @@ import java.io.IOException
 class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, OnMapReadyCallback {
 
     private lateinit var  navigationViewModel: NavigationViewModel // Shared ViewModel
-
-
-    private var _binding: FragmentMapBinding? = null
-    private val binding get() = _binding!!
-
     private lateinit var mapView: MapView
     lateinit var map: MapLibreMap // Made public to be accessible from MainActivity if needed initially
 
@@ -70,13 +51,12 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, OnMapReadyCa
     private var currentLocationSource: GeoJsonSource? = null
     private val CURRENT_LOCATION_SOURCE_ID = "current-location-source"
     private val CURRENT_LOCATION_LAYER_ID = "current-location-layer"
-    private lateinit var locationReceiver: LocationBroadcastReceiver
-
-    private val ROUTE_SOURCE_ID = "route-source"
+       private val ROUTE_SOURCE_ID = "route-source"
     private val ROUTE_LAYER_ID = "route-layer"
     private var routeSource: GeoJsonSource? = null
 
     private var maneuverTextView: MaterialTextView? = null
+    private var maneuverTextViewInFragment: TextView? = null
 
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -89,15 +69,13 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, OnMapReadyCa
         inflater: LayoutInflater, container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View? {
-        MapLibre.getInstance(requireContext())
-        _binding = FragmentMapBinding.inflate(inflater, container, false)
-        mapView = binding.mapViewInFragment
+        val view = inflater.inflate(R.layout.fragment_map, container, false)
+        mapView = view.findViewById(R.id.mapViewInFragment)
         mapView.onCreate(savedInstanceState)
         mapView.getMapAsync(this)
-
-        locationReceiver = LocationBroadcastReceiver()
-
-        return binding.root
+        maneuverTextViewInFragment = view.findViewById(R.id.mapFragmentManeuverTextView)
+        Log.d("MapFragment", "maneuverTextViewInFragment is null: ${maneuverTextViewInFragment == null}") // ADD THIS LOG
+        return view
     }
 
     override fun onMapReady(mapLibreMap: MapLibreMap) {
@@ -117,16 +95,42 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, OnMapReadyCa
             }
         }
         map.addOnMapLongClickListener(this)
-//        setupCurrentUserLocationLayer() // For the blue dot
         mapView.let { registerForContextMenu(it) }
 
         loadInitialMapStyle()
         setupLocationDisplay()
         // Observe displayed path from ViewModel (which gets it from LocationService)
         viewLifecycleOwner.lifecycleScope.launch {
+            navigationViewModel.lastKnownGpsLocation.collectLatest { location ->
+                updateCurrentLocationIndicatorAndCamera(location.latitude, location.longitude, location.accuracy, location.bearing, location.bearingAccuracyDegrees)
+            }
+        }
+        viewLifecycleOwner.lifecycleScope.launch {
             navigationViewModel.currentDisplayedPath.collectLatest { pathSegment ->
                 drawRouteSegmentOnMapUI(pathSegment) // Your existing method
             }
+        }
+        viewLifecycleOwner.lifecycleScope.launch {
+            navigationViewModel.maneuverText.collectLatest { text ->
+                Log.d("MapFragment", "Received maneuverText from ViewModel: '$text'")
+                Log.d("MapFragment", "Current Navigation State for maneuver visibility: ${navigationViewModel.navigationState.value}")
+
+                if (text.isNotBlank() && (navigationViewModel.navigationState.value == NavigationState.NAVIGATING || navigationViewModel.navigationState.value == NavigationState.OFF_ROUTE)) {
+                    maneuverTextViewInFragment?.text = text
+                    maneuverTextViewInFragment?.visibility = View.VISIBLE
+                    Log.d("MapFragment", "Maneuver TextView set to VISIBLE with text: '$text'")
+                } else {
+                    maneuverTextViewInFragment?.text = ""
+                    // Only hide if truly not navigating, otherwise, a blank text might be intentional for a moment
+                    if (navigationViewModel.navigationState.value != NavigationState.NAVIGATING && navigationViewModel.navigationState.value != NavigationState.OFF_ROUTE) {
+                        maneuverTextViewInFragment?.visibility = View.GONE
+                        Log.d("MapFragment", "Maneuver TextView set to GONE")
+                    } else if (text.isBlank()){
+                        maneuverTextViewInFragment?.visibility = View.GONE // Hide if text is blank even if navigating (e.g. end of route before arrival state)
+                        Log.d("MapFragment", "Maneuver TextView set to GONE because text is blank during navigation.")
+                    }
+                }
+           }
         }
         // Observe navigation state for camera adjustments (e.g., zoom to route on start)
         viewLifecycleOwner.lifecycleScope.launch {
@@ -143,6 +147,11 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, OnMapReadyCa
                     navigationViewModel.lastKnownGpsLocation.value?.let { loc ->
                         centerMapOnLocation(LatLng(loc.latitude, loc.longitude), loc.bearing)
                     }
+                }
+                if (navState == NavigationState.NAVIGATING || navState == NavigationState.OFF_ROUTE) {
+                    maneuverTextViewInFragment?.visibility = View.VISIBLE
+                } else {
+                    maneuverTextViewInFragment?.visibility = View.GONE
                 }
             }
         }
@@ -196,16 +205,12 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, OnMapReadyCa
         Log.i("MapFragment", "Resumed")
         super.onResume()
         if (::mapView.isInitialized) mapView.onResume()
-        LocalBroadcastManager.getInstance(requireContext()).registerReceiver(
-            locationReceiver,
-            IntentFilter(LocationService.ACTION_LOCATION_UPDATE))
     }
 
     override fun onPause() {
         Log.i("MapFragment", "Paused")
         super.onPause()
         if (::mapView.isInitialized) mapView.onPause()
-        LocalBroadcastManager.getInstance(requireContext()).unregisterReceiver(locationReceiver)
     }
 
     override fun onStop() {
@@ -329,44 +334,15 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, OnMapReadyCa
         }
     }
 
-    // Called by MainActivity when non-navigational GPS update is available
-    fun updateCurrentUserLocationOnMap(point: LatLng) {
-        if (!::map.isInitialized || !map.style!!.isFullyLoaded) return
-        val pointJson = JSONObject().apply {
-            put("type", "Point")
-            put("coordinates", JSONArray().put(point.longitude).put(point.latitude))
-        }
-        currentLocationSource?.setGeoJson(pointJson.toString())
-
-        // Center map if not navigating and not user panning
-        if (navigationViewModel.navigationState.value == NavigationState.IDLE /* && !isUserPanning */) {
-            map.animateCamera(CameraUpdateFactory.newLatLngZoom(point, 15.0))
-        }
-    }
-
-
-    private fun setupCurrentUserLocationLayer() {
-        if (!::map.isInitialized || !map.style!!.isFullyLoaded) return
-        map.getStyle { style ->
-            if (style.getSource(CURRENT_LOCATION_SOURCE_ID) == null) {
-                currentLocationSource = GeoJsonSource(CURRENT_LOCATION_SOURCE_ID)
-                style.addSource(currentLocationSource!!)
-            }
-            if (style.getLayer(CURRENT_LOCATION_LAYER_ID) == null) {
-                val circleLayer = CircleLayer(CURRENT_LOCATION_LAYER_ID, CURRENT_LOCATION_SOURCE_ID)
-                    .withProperties( /* ... your blue dot style ... */ )
-                style.addLayer(circleLayer)
-            }
-        }
-    }
     private fun centerMapOnLocation(latLng: LatLng, bearing: Float?) {
         if (!::map.isInitialized /* || isUserPanning */) return // Add isUserPanning flag if MapFragment manages it
 
         val cameraBuilder = org.maplibre.android.camera.CameraPosition.Builder().target(latLng)
+            .zoom(map.cameraPosition.zoom.coerceAtLeast(17.0))
+            .tilt(45.0)
         bearing?.let { cameraBuilder.bearing(it.toDouble()) }
-        cameraBuilder.zoom(map.cameraPosition.zoom.coerceAtLeast(16.0)) // Keep zoom or zoom in
 
-        map.animateCamera(CameraUpdateFactory.newCameraPosition(cameraBuilder.build()), 1000)
+        map.animateCamera(CameraUpdateFactory.newCameraPosition(cameraBuilder.build()), 600)
     }
 
 
@@ -403,12 +379,11 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, OnMapReadyCa
     }
     private fun updateLocationOnMap(latLng: LatLng) {
         if (!::map.isInitialized || currentLocationSource == null) return
-        val pointJson = JSONObject()
-        pointJson.put("type", "Point")
-        val coordinatesArray = org.json.JSONArray(listOf(latLng.longitude, latLng.latitude))
-        pointJson.put("coordinates", coordinatesArray)
-        val geoJsonString = pointJson.toString()
-        currentLocationSource?.setGeoJson(geoJsonString)
+        val pointJson = JSONObject().apply {
+            put("type", "Point")
+            put("coordinates", JSONArray().put(latLng.longitude).put(latLng.latitude))
+        }
+        currentLocationSource?.setGeoJson(pointJson.toString())
     }
 
     private fun updateCurrentLocationIndicatorAndCamera(latitude: Double, longitude: Double, accuracy: Float? = null, bearing: Float? = null, bearingAccuracy: Float? = null) {
@@ -429,33 +404,6 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, OnMapReadyCa
                 .target(newLocationLatLng)
             cameraPositionBuilder.zoom(map.cameraPosition.zoom.coerceAtLeast(16.0))
             map.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPositionBuilder.build()), 1500)
-        }
-    }
-
-    inner class LocationBroadcastReceiver : BroadcastReceiver() {
-        override fun onReceive(context: Context?, intent: Intent?) {
-            if (intent?.action == LocationService.ACTION_LOCATION_UPDATE) {
-                val latitude = intent.getDoubleExtra(LocationService.EXTRA_LATITUDE, 0.0)
-                val longitude = intent.getDoubleExtra(LocationService.EXTRA_LONGITUDE, 0.0)
-                val accuracy = intent.getFloatExtra(LocationService.ACCURACY, 0.0f)
-                val bearing = intent.getFloatExtra(LocationService.BEARING, 0.0f)
-                val bearingAccuracy = intent.getFloatExtra(LocationService.BEARING_ACCURACY, 0.0f)
-                Log.d("LocationUpdates", "BroadcastReceiver from Service: Lat: $latitude, Lng: $longitude, accuracy: $accuracy, bearing: $bearing, bearingAccuracy: $bearingAccuracy")
-                if (latitude != 0.0 && longitude != 0.0 && accuracy > 1.0f) {
-                    updateCurrentLocationIndicatorAndCamera(latitude, longitude, accuracy, bearing, bearingAccuracy)
-                    val updateLastKnownGpsLocation = Location(LocationManager.GPS_PROVIDER).apply {
-                        latitude
-                        longitude
-                    }
-                    updateLastKnownGpsLocation.accuracy = accuracy
-                    updateLastKnownGpsLocation.bearing = bearing
-                    updateLastKnownGpsLocation.latitude = latitude
-                    updateLastKnownGpsLocation.longitude = longitude
-                    updateLastKnownGpsLocation.time = System.currentTimeMillis()
-
-                    navigationViewModel.updateLastKnownGpsLocation(updateLastKnownGpsLocation)
-                }
-            }
         }
     }
 }
