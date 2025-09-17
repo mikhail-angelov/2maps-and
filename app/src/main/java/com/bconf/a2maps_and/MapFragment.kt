@@ -9,7 +9,10 @@ import android.view.LayoutInflater
 import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
+import android.widget.ImageButton
 import android.widget.TextView
+import android.widget.Toast
+import com.google.android.material.floatingactionbutton.FloatingActionButton
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
@@ -47,6 +50,7 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, OnMapReadyCa
     private val ID_MENU_NAVIGATE = 1
 
     private var lastKnownLocation: android.location.Location? = null
+    private var fabCenterOnLocation: FloatingActionButton? = null // Reference for the new FAB
     private var isUserPanning = false
     private var currentLocationSource: GeoJsonSource? = null
     private val CURRENT_LOCATION_SOURCE_ID = "current-location-source"
@@ -57,6 +61,9 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, OnMapReadyCa
 
     private var maneuverTextView: MaterialTextView? = null
     private var maneuverTextViewInFragment: TextView? = null
+    private var navigationInfoPanel: View? = null
+    private var remainingDistanceTextView: TextView? = null
+    private var stopNavigationButton: ImageButton? = null
 
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -74,6 +81,25 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, OnMapReadyCa
         mapView.onCreate(savedInstanceState)
         mapView.getMapAsync(this)
         maneuverTextViewInFragment = view.findViewById(R.id.mapFragmentManeuverTextView)
+        navigationInfoPanel = view.findViewById(R.id.navigationInfoPanel)
+        remainingDistanceTextView = view.findViewById(R.id.remainingDistanceTextView)
+        stopNavigationButton = view.findViewById(R.id.stopNavigationButton)
+        fabCenterOnLocation = view.findViewById(R.id.fabCenterOnLocationInFragment)
+
+        stopNavigationButton?.setOnClickListener {
+            navigationViewModel.stopNavigation()
+        }
+        fabCenterOnLocation?.setOnClickListener {
+            navigationViewModel.lastKnownGpsLocation.value?.let { location ->
+                val currentLatLng = org.maplibre.android.geometry.LatLng(location.latitude, location.longitude)
+                val cameraBuilder = CameraPosition.Builder().target(currentLatLng)
+                    .zoom(map.cameraPosition.zoom.coerceAtLeast(15.0)).tilt(0.0)
+
+                map.animateCamera(CameraUpdateFactory.newCameraPosition(cameraBuilder.build()), 600)
+            } ?: run {
+                Toast.makeText(requireContext(), "Current location not available yet.", Toast.LENGTH_SHORT).show()
+            }
+        }
         Log.d("MapFragment", "maneuverTextViewInFragment is null: ${maneuverTextViewInFragment == null}") // ADD THIS LOG
         return view
     }
@@ -99,7 +125,7 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, OnMapReadyCa
 
         loadInitialMapStyle()
         setupLocationDisplay()
-        // Observe displayed path from ViewModel (which gets it from LocationService)
+
         viewLifecycleOwner.lifecycleScope.launch {
             navigationViewModel.lastKnownGpsLocation.collectLatest { location ->
                 updateCurrentLocationIndicatorAndCamera(location.latitude, location.longitude, location.accuracy, location.bearing, location.bearingAccuracyDegrees)
@@ -113,49 +139,51 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, OnMapReadyCa
         viewLifecycleOwner.lifecycleScope.launch {
             navigationViewModel.maneuverText.collectLatest { text ->
                 Log.d("MapFragment", "Received maneuverText from ViewModel: '$text'")
-                Log.d("MapFragment", "Current Navigation State for maneuver visibility: ${navigationViewModel.navigationState.value}")
-
-                if (text.isNotBlank() && (navigationViewModel.navigationState.value == NavigationState.NAVIGATING || navigationViewModel.navigationState.value == NavigationState.OFF_ROUTE)) {
-                    maneuverTextViewInFragment?.text = text
-                    maneuverTextViewInFragment?.visibility = View.VISIBLE
-                    Log.d("MapFragment", "Maneuver TextView set to VISIBLE with text: '$text'")
-                } else {
-                    maneuverTextViewInFragment?.text = ""
-                    // Only hide if truly not navigating, otherwise, a blank text might be intentional for a moment
-                    if (navigationViewModel.navigationState.value != NavigationState.NAVIGATING && navigationViewModel.navigationState.value != NavigationState.OFF_ROUTE) {
-                        maneuverTextViewInFragment?.visibility = View.GONE
-                        Log.d("MapFragment", "Maneuver TextView set to GONE")
-                    } else if (text.isBlank()){
-                        maneuverTextViewInFragment?.visibility = View.GONE // Hide if text is blank even if navigating (e.g. end of route before arrival state)
-                        Log.d("MapFragment", "Maneuver TextView set to GONE because text is blank during navigation.")
-                    }
-                }
+                maneuverTextViewInFragment?.text = text
+                updateNavigationUi(navigationViewModel.navigationState.value)
            }
         }
+
+         viewLifecycleOwner.lifecycleScope.launch {
+             navigationViewModel.remainingDistance.collectLatest { distanceText ->
+                 remainingDistanceTextView?.text = distanceText
+             }
+         }
+
         // Observe navigation state for camera adjustments (e.g., zoom to route on start)
         viewLifecycleOwner.lifecycleScope.launch {
             navigationViewModel.navigationState.collectLatest { navState ->
-                if (navState == NavigationState.NAVIGATING && navigationViewModel.currentDisplayedPath.value.isNotEmpty()) {
+                updateNavigationUi(navState)
+
+                if (navState === NavigationState.NAVIGATING && navigationViewModel.currentDisplayedPath.value.isNotEmpty()) {
                     // Avoid re-zooming if already navigating and path just updated slightly
                     // This logic needs to be smarter, e.g., only zoom on first NAVIGATING state after IDLE
                     if(map.cameraPosition.zoom < 10) { // Simple check, improve this
                         zoomToRoute(navigationViewModel.currentDisplayedPath.value)
                     }
                 }
-                // Center map on user when navigating if not panned by user
-                if (navState == NavigationState.NAVIGATING || navState == NavigationState.OFF_ROUTE) {
-                    navigationViewModel.lastKnownGpsLocation.value?.let { loc ->
-                        centerMapOnLocation(LatLng(loc.latitude, loc.longitude), loc.bearing)
-                    }
-                }
-                if (navState == NavigationState.NAVIGATING || navState == NavigationState.OFF_ROUTE) {
-                    maneuverTextViewInFragment?.visibility = View.VISIBLE
-                } else {
-                    maneuverTextViewInFragment?.visibility = View.GONE
-                }
             }
         }
     }
+
+    private fun updateNavigationUi(navState: NavigationState) {
+        val isNavigating = navState === NavigationState.NAVIGATING || navState === NavigationState.OFF_ROUTE
+
+        navigationInfoPanel?.visibility = if (isNavigating) View.VISIBLE else View.GONE
+
+        val maneuverText = maneuverTextViewInFragment?.text
+        if (isNavigating && !maneuverText.isNullOrBlank()) {
+            maneuverTextViewInFragment?.visibility = View.VISIBLE
+        } else {
+            maneuverTextViewInFragment?.visibility = View.GONE
+        }
+        fabCenterOnLocation?.visibility = if (navState == NavigationState.IDLE) {
+            View.VISIBLE
+        } else {
+            View.GONE
+        }
+    }
+
 
     @Throws(IOException::class)
     fun getFileFromAssets(context: Context?, fileName: String): File =
@@ -170,7 +198,7 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, OnMapReadyCa
                 }
             }
 
-     fun loadInitialMapStyle(mbtilesFile: File? = null, onStyleLoaded: (() -> Unit)? = null) {
+     fun loadInitialMapStyle(onStyleLoaded: (() -> Unit)? = null) {
          if (!::map.isInitialized) return
 
         val file = getFileFromAssets(context, "niz-osm.mbtiles")
@@ -252,8 +280,8 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, OnMapReadyCa
         super.onCreateContextMenu(menu, v, menuInfo)
         // Check the ID of the MapView inside the fragment's layout
         if (v.id == R.id.mapViewInFragment && longPressedLatLng != null) {
-//            menu.setHeaderTitle("Point Options")
-            val label = if (navigationViewModel.navigationState.value === NavigationState.IDLE) "Navigate to this point" else "Stop navigation"
+            menu.setHeaderTitle("Navigate")
+            val label = if (navigationViewModel.navigationState.value === NavigationState.IDLE) "to this point" else "stop"
             menu.add(0, ID_MENU_NAVIGATE, 1, label)
         }
     }
@@ -334,18 +362,6 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, OnMapReadyCa
         }
     }
 
-    private fun centerMapOnLocation(latLng: LatLng, bearing: Float?) {
-        if (!::map.isInitialized /* || isUserPanning */) return // Add isUserPanning flag if MapFragment manages it
-
-        val cameraBuilder = org.maplibre.android.camera.CameraPosition.Builder().target(latLng)
-            .zoom(map.cameraPosition.zoom.coerceAtLeast(17.0))
-            .tilt(45.0)
-        bearing?.let { cameraBuilder.bearing(it.toDouble()) }
-
-        map.animateCamera(CameraUpdateFactory.newCameraPosition(cameraBuilder.build()), 600)
-    }
-
-
     private fun clearRouteAndManeuver() {
         if (!::map.isInitialized) return
         map.getStyle { style ->
@@ -389,21 +405,33 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, OnMapReadyCa
     private fun updateCurrentLocationIndicatorAndCamera(latitude: Double, longitude: Double, accuracy: Float? = null, bearing: Float? = null, bearingAccuracy: Float? = null) {
         if (!::map.isInitialized) return // Guard against map not being ready
 
+        Log.d("LocationUpdates", "Received from Service: Lat: $latitude, Lng: $longitude, accuracy: $accuracy, bearing: $bearing, bearingAccuracy: $bearingAccuracy")
+
         val newLocation = android.location.Location("LocationService")
         newLocation.latitude = latitude
         newLocation.longitude = longitude
-        lastKnownLocation = newLocation
         val newLocationLatLng = LatLng(latitude, longitude)
 
         updateLocationOnMap(newLocationLatLng)
 
-        Log.d("LocationUpdates", "Received from Service: Lat: $latitude, Lng: $longitude")
 
-        if (!isUserPanning) {
-            val cameraPositionBuilder = CameraPosition.Builder()
-                .target(newLocationLatLng)
-            cameraPositionBuilder.zoom(map.cameraPosition.zoom.coerceAtLeast(16.0))
-            map.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPositionBuilder.build()), 1500)
+        if(lastKnownLocation == null) {
+            val cameraBuilder = CameraPosition.Builder()
+                .zoom(map.cameraPosition.zoom.coerceAtLeast(15.0))
+                .tilt(0.0)
+            map.animateCamera(CameraUpdateFactory.newCameraPosition(cameraBuilder.build()), 600)
+        }
+        lastKnownLocation = newLocation
+
+        val isNav = navigationViewModel.navigationState.value === NavigationState.NAVIGATING || navigationViewModel.navigationState.value === NavigationState.OFF_ROUTE
+
+        if (!isUserPanning && isNav) {
+            val cameraBuilder = CameraPosition.Builder().target(newLocationLatLng)
+                .zoom(map.cameraPosition.zoom.coerceAtLeast(17.0))
+                .tilt(45.0)
+            bearing?.let { cameraBuilder.bearing(it.toDouble()) }
+
+            map.animateCamera(CameraUpdateFactory.newCameraPosition(cameraBuilder.build()), 600)
         }
     }
 }

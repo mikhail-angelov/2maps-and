@@ -40,6 +40,11 @@ class MainActivity : AppCompatActivity() {
                 if (state == NavigationState.ARRIVED) {
                     Toast.makeText(this@MainActivity, "You have arrived!", Toast.LENGTH_LONG).show()
                     // ViewModel will call stopNavigation on the service
+                } else if (state == NavigationState.ROUTE_CALCULATION) {
+                    Toast.makeText(this@MainActivity, "Requesting route...", Toast.LENGTH_LONG)
+                        .show()
+                }else if (state == NavigationState.OFF_ROUTE) {
+                    Toast.makeText(this@MainActivity, "You are off route!", Toast.LENGTH_LONG).show()
                 } else if (state == NavigationState.ROUTE_CALCULATION_FAILED) {
                     Toast.makeText(this@MainActivity, "Route calculation failed.", Toast.LENGTH_LONG).show()
                 }

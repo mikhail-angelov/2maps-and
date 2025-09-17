@@ -22,10 +22,12 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import org.maplibre.android.geometry.LatLng
 import android.location.Location
+import androidx.compose.ui.text.intl.Locale
 import com.bconf.a2maps_and.navigation.ActiveManeuverDetails
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.text.format
 
 class NavigationViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -48,6 +50,9 @@ class NavigationViewModel(application: Application) : AndroidViewModel(applicati
     val navigationState: StateFlow<NavigationState> = NavigationEngineService.navigationState
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), NavigationState.IDLE)
 
+    val remainingDistance: StateFlow<String> = NavigationEngineService.remainingDistanceInMeters.map { distance ->
+        formatDistanceForDisplay(distance)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "0.0 m")
 
     // --- UI State derived from navigationState and currentManeuver ---
     val maneuverText: StateFlow<String> = activeManeuverDetails.map { details ->
@@ -93,11 +98,6 @@ class NavigationViewModel(application: Application) : AndroidViewModel(applicati
             }
         }
     }
-
-    val isNavigationActive: StateFlow<Boolean> = navigationState.map {
-        it == NavigationState.NAVIGATING || it == NavigationState.OFF_ROUTE
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
-
 
     fun requestNavigationTo(destinationLatLng: LatLng) {
         viewModelScope.launch {
@@ -179,7 +179,6 @@ class NavigationViewModel(application: Application) : AndroidViewModel(applicati
         }
         app.startService(serviceIntent) // Service will handle its own stopping
     }
-
 
 
     override fun onCleared() {
