@@ -161,15 +161,22 @@ class NavigationViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     private fun startLocationServiceWithRoute(routeResponse: ValhallaRouteResponse, fromPoint: LatLng, toPoint: LatLng) {
-        val serviceIntent = Intent(app, NavigationEngineService::class.java).apply {
+        val intent = Intent(app, NavigationEngineService::class.java).apply {
             action = NavigationEngineService.ACTION_START_NAVIGATION
             putExtra(NavigationEngineService.EXTRA_ROUTE_RESPONSE_JSON, Gson().toJson(routeResponse))
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            app.startForegroundService(serviceIntent)
+            app.startForegroundService(intent)
         } else {
-            app.startService(serviceIntent)
+            app.startService(intent)
         }
+    }
+
+    fun recalculateRoute() {
+        val intent = Intent(getApplication(), NavigationEngineService::class.java).apply {
+            action = NavigationEngineService.ACTION_REROUTE_NAVIGATION
+        }
+        app.startService(intent)
     }
 
     fun stopNavigation() {

@@ -52,10 +52,25 @@
             android:textColor="@android:color/white"
             android:textSize="18sp"
             app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintEnd_toStartOf="@+id/stopNavigationButton"
+            app:layout_constraintEnd_toStartOf="@+id/rerouteButton"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent"
             tools:text="Distance: 5.2 km" />
+
+        <ImageButton
+            android:id="@+id/rerouteButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="8dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Recalculate Route"
+            android:src="@android:drawable/ic_menu_rotate"
+            android:visibility="gone"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toStartOf="@+id/stopNavigationButton"
+            app:layout_constraintTop_toTopOf="parent"
+            app:tint="@android:color/white"
+            tools:visibility="visible" />
 
         <ImageButton
             android:id="@+id/stopNavigationButton"

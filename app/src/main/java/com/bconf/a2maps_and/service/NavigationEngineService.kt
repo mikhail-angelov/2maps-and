@@ -80,6 +80,8 @@ class NavigationEngineService : Service() {
     companion object {
         const val ACTION_START_NAVIGATION = "com.bconf.a2maps_and.action.START_NAVIGATION"
         const val ACTION_STOP_NAVIGATION = "com.bconf.a2maps_and.action.STOP_NAVIGATION"
+
+        const val ACTION_REROUTE_NAVIGATION = "com.bconf.a2maps_and.action.ACTION_REROUTE_NAVIGATION"
         const val ACTION_START_LOCATION_SERVICE = "ACTION_START_LOCATION_SERVICE"
         const val ACTION_STOP_LOCATION_SERVICE = "ACTION_STOP_LOCATION_SERVICE"
         const val EXTRA_ROUTE_RESPONSE_JSON = "extra_route_response_json"
@@ -232,6 +234,10 @@ class NavigationEngineService : Service() {
             }
             ACTION_STOP_NAVIGATION -> {
                 stopNavigationLogic()
+            }
+            ACTION_REROUTE_NAVIGATION -> {
+                rerouteCount = 5
+                rerouteNavigationLogic()
             }
             ACTION_START_LOCATION_SERVICE -> {
                 startForegroundServiceWithNotification()
@@ -518,6 +524,16 @@ class NavigationEngineService : Service() {
             String.format("%.0f m", distanceMeters)
         } else {
             String.format("%.1f km", distanceMeters / 1000.0)
+        }
+    }
+
+    private fun rerouteNavigationLogic() {
+        originalFullRoutePath.lastOrNull()?.let { destination ->
+            // Check if a reroute isn't already in progress
+            if (_navigationState.value != NavigationState.ROUTE_CALCULATION) {
+                _navigationState.value = NavigationState.ROUTE_CALCULATION
+                attemptReroute(lastLocation.value, destination)
+            }
         }
     }
 

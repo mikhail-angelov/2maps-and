@@ -2,6 +2,7 @@ package com.bconf.a2maps_and
 
 import android.content.Context
 import android.graphics.Color
+import android.location.Location
 import android.os.Bundle
 import android.util.Log
 import android.view.ContextMenu
@@ -64,6 +65,7 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, OnMapReadyCa
     private var navigationInfoPanel: View? = null
     private var remainingDistanceTextView: TextView? = null
     private var stopNavigationButton: ImageButton? = null
+    private var rerouteButton: ImageButton? = null
 
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -84,8 +86,12 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, OnMapReadyCa
         navigationInfoPanel = view.findViewById(R.id.navigationInfoPanel)
         remainingDistanceTextView = view.findViewById(R.id.remainingDistanceTextView)
         stopNavigationButton = view.findViewById(R.id.stopNavigationButton)
+        rerouteButton = view.findViewById(R.id.rerouteButton)
         fabCenterOnLocation = view.findViewById(R.id.fabCenterOnLocationInFragment)
 
+        rerouteButton?.setOnClickListener {
+            navigationViewModel.recalculateRoute()
+        }
         stopNavigationButton?.setOnClickListener {
             navigationViewModel.stopNavigation()
         }
@@ -128,7 +134,7 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, OnMapReadyCa
 
         viewLifecycleOwner.lifecycleScope.launch {
             navigationViewModel.lastKnownGpsLocation.collectLatest { location ->
-                updateCurrentLocationIndicatorAndCamera(location.latitude, location.longitude, location.accuracy, location.bearing, location.bearingAccuracyDegrees)
+                updateCurrentLocationIndicatorAndCamera(location)
             }
         }
         viewLifecycleOwner.lifecycleScope.launch {
@@ -155,7 +161,7 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, OnMapReadyCa
             navigationViewModel.navigationState.collectLatest { navState ->
                 updateNavigationUi(navState)
 
-                if (navState === NavigationState.NAVIGATING && navigationViewModel.currentDisplayedPath.value.isNotEmpty()) {
+                if (navState == NavigationState.NAVIGATING && navigationViewModel.currentDisplayedPath.value.isNotEmpty()) {
                     // Avoid re-zooming if already navigating and path just updated slightly
                     // This logic needs to be smarter, e.g., only zoom on first NAVIGATING state after IDLE
                     if(map.cameraPosition.zoom < 10) { // Simple check, improve this
@@ -167,12 +173,13 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, OnMapReadyCa
     }
 
     private fun updateNavigationUi(navState: NavigationState) {
-        val isNavigating = navState === NavigationState.NAVIGATING || navState === NavigationState.OFF_ROUTE
+        val isNavigatingOrOffRoute = navState == NavigationState.NAVIGATING || navState == NavigationState.OFF_ROUTE
 
-        navigationInfoPanel?.visibility = if (isNavigating) View.VISIBLE else View.GONE
+        navigationInfoPanel?.visibility = if (isNavigatingOrOffRoute) View.VISIBLE else View.GONE
+        rerouteButton?.visibility = if (navState == NavigationState.OFF_ROUTE) View.VISIBLE else View.GONE
 
         val maneuverText = maneuverTextViewInFragment?.text
-        if (isNavigating && !maneuverText.isNullOrBlank()) {
+        if (isNavigatingOrOffRoute && !maneuverText.isNullOrBlank()) {
             maneuverTextViewInFragment?.visibility = View.VISIBLE
         } else {
             maneuverTextViewInFragment?.visibility = View.GONE
@@ -281,7 +288,7 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, OnMapReadyCa
         // Check the ID of the MapView inside the fragment's layout
         if (v.id == R.id.mapViewInFragment && longPressedLatLng != null) {
             menu.setHeaderTitle("Navigate")
-            val label = if (navigationViewModel.navigationState.value === NavigationState.IDLE) "to this point" else "stop"
+            val label = if (navigationViewModel.navigationState.value == NavigationState.IDLE) "to this point" else "stop"
             menu.add(0, ID_MENU_NAVIGATE, 1, label)
         }
     }
@@ -293,7 +300,7 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, OnMapReadyCa
                 ID_MENU_NAVIGATE -> {
                     // Toast.makeText(requireContext(), "'To' set: $coordinateText", Toast.LENGTH_SHORT).show()
                     Log.d("MapContextMenu", "Navigate to point: $coordinateText : ${navigationViewModel.navigationState.value}")
-                    if (navigationViewModel.navigationState.value === NavigationState.IDLE) {
+                    if (navigationViewModel.navigationState.value == NavigationState.IDLE) {
                         navigationViewModel.requestNavigationTo(coords) // ViewModel handles the rest
                     }else{
                         navigationViewModel.stopNavigation()
@@ -330,108 +337,91 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, OnMapReadyCa
                 })
             }
             lineStringJson.put("coordinates", coordinatesArray)
-            val lineStringGeoJsonString = lineStringJson.toString()
 
-            routeSource = GeoJsonSource(ROUTE_SOURCE_ID, lineStringGeoJsonString)
+            val geoJson = JSONObject()
+            geoJson.put("type", "Feature")
+            geoJson.put("geometry", lineStringJson)
+
+            routeSource = GeoJsonSource(ROUTE_SOURCE_ID, geoJson.toString())
             style.addSource(routeSource!!)
 
-            val routeLayer = LineLayer(ROUTE_LAYER_ID, ROUTE_SOURCE_ID).withProperties(
-                PropertyFactory.lineColor(Color.parseColor("#3887be")), // A nice blue
-                PropertyFactory.lineWidth(7f),
-                PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
-                PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND)
-            )
-            style.addLayerBelow(routeLayer, "road-label") // Draw below labels if possible, or just addLayer
-
-            Log.d("MapFragment", "Route segment drawn/updated on map. Points: ${routeSegment.size}")
+            val routeLayer = LineLayer(ROUTE_LAYER_ID, ROUTE_SOURCE_ID).apply {
+                setProperties(
+                    PropertyFactory.lineColor(Color.parseColor("#FF3887BE")),
+                    PropertyFactory.lineWidth(5f),
+                    PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
+                    PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND)
+                )
+            }
+            style.addLayer(routeLayer)
         }
-    }
-
-    private fun zoomToRoute(routePath: List<LatLng>) {
-        if (!::map.isInitialized || routePath.size < 2) return
-
-        val boundsBuilder = org.maplibre.android.geometry.LatLngBounds.Builder()
-        routePath.forEach { boundsBuilder.include(it) }
-        try {
-            val bounds = boundsBuilder.build()
-            map.animateCamera(CameraUpdateFactory.newLatLngBounds(bounds, 150), 1000) // 150px padding
-        } catch (e: IllegalStateException) {
-            Log.w("MapFragment", "Could not create bounds for zooming to route: ${e.message}")
-            // Fallback: zoom to the first point
-            map.animateCamera(CameraUpdateFactory.newLatLngZoom(routePath.first(), 15.0), 1000)
-        }
-    }
-
-    private fun clearRouteAndManeuver() {
-        if (!::map.isInitialized) return
-        map.getStyle { style ->
-            style.removeLayer(ROUTE_LAYER_ID)
-            style.removeSource(ROUTE_SOURCE_ID)
-        }
-        maneuverTextView?.visibility = View.GONE
     }
 
 
     private fun setupLocationDisplay() {
-        if (!::map.isInitialized) return
         map.getStyle { style ->
+            // Check if source and layer already exist
             if (style.getSource(CURRENT_LOCATION_SOURCE_ID) == null) {
                 currentLocationSource = GeoJsonSource(CURRENT_LOCATION_SOURCE_ID)
                 style.addSource(currentLocationSource!!)
             } else {
-                currentLocationSource = style.getSourceAs(CURRENT_LOCATION_SOURCE_ID)
+                currentLocationSource = style.getSource(CURRENT_LOCATION_SOURCE_ID) as GeoJsonSource
             }
 
             if (style.getLayer(CURRENT_LOCATION_LAYER_ID) == null) {
-                val circleLayer = CircleLayer(CURRENT_LOCATION_LAYER_ID, CURRENT_LOCATION_SOURCE_ID).withProperties(
-                    PropertyFactory.circleRadius(10f),
-                    PropertyFactory.circleColor("blue"),
-                    PropertyFactory.circleStrokeColor("white"),
-                    PropertyFactory.circleStrokeWidth(2f)
-                )
-                style.addLayer(circleLayer)
+                val locationLayer = CircleLayer(CURRENT_LOCATION_LAYER_ID, CURRENT_LOCATION_SOURCE_ID).apply {
+                    setProperties(
+                        PropertyFactory.circleColor(Color.BLUE),
+                        PropertyFactory.circleRadius(8f),
+                        PropertyFactory.circleStrokeColor(Color.WHITE),
+                        PropertyFactory.circleStrokeWidth(2f)
+                    )
+                }
+                style.addLayer(locationLayer)
             }
         }
     }
-    private fun updateLocationOnMap(latLng: LatLng) {
+
+    private fun updateCurrentLocationIndicatorAndCamera(
+        location: Location
+    ) {
         if (!::map.isInitialized || currentLocationSource == null) return
         val pointJson = JSONObject().apply {
             put("type", "Point")
-            put("coordinates", JSONArray().put(latLng.longitude).put(latLng.latitude))
+            put("coordinates", JSONArray().put(location.longitude).put(location.latitude))
         }
         currentLocationSource?.setGeoJson(pointJson.toString())
-    }
 
-    private fun updateCurrentLocationIndicatorAndCamera(latitude: Double, longitude: Double, accuracy: Float? = null, bearing: Float? = null, bearingAccuracy: Float? = null) {
-        if (!::map.isInitialized) return // Guard against map not being ready
+        if ((navigationViewModel.navigationState.value == NavigationState.NAVIGATING ||
+                    navigationViewModel.navigationState.value == NavigationState.OFF_ROUTE) && !isUserPanning
+        ) {
 
-        Log.d("LocationUpdates", "Received from Service: Lat: $latitude, Lng: $longitude, accuracy: $accuracy, bearing: $bearing, bearingAccuracy: $bearingAccuracy")
-
-        val newLocation = android.location.Location("LocationService")
-        newLocation.latitude = latitude
-        newLocation.longitude = longitude
-        val newLocationLatLng = LatLng(latitude, longitude)
-
-        updateLocationOnMap(newLocationLatLng)
-
-
-        if(lastKnownLocation == null) {
+            // When navigating, camera should follow the user's location and bearing
             val cameraBuilder = CameraPosition.Builder()
-                .zoom(map.cameraPosition.zoom.coerceAtLeast(15.0))
-                .tilt(0.0)
-            map.animateCamera(CameraUpdateFactory.newCameraPosition(cameraBuilder.build()), 600)
-        }
-        lastKnownLocation = newLocation
+                .target(LatLng(location.latitude, location.longitude))
+                .zoom(map.cameraPosition.zoom.coerceAtLeast(16.0)) // Higher zoom during nav
+                .tilt(45.0) // Tilted view
+                .bearing(location.bearing.toDouble()) // Follow user's direction
 
-        val isNav = navigationViewModel.navigationState.value === NavigationState.NAVIGATING || navigationViewModel.navigationState.value === NavigationState.OFF_ROUTE
-
-        if (!isUserPanning && isNav) {
-            val cameraBuilder = CameraPosition.Builder().target(newLocationLatLng)
-                .zoom(map.cameraPosition.zoom.coerceAtLeast(17.0))
-                .tilt(45.0)
-            bearing?.let { cameraBuilder.bearing(it.toDouble()) }
-
-            map.animateCamera(CameraUpdateFactory.newCameraPosition(cameraBuilder.build()), 600)
+            map.animateCamera(CameraUpdateFactory.newCameraPosition(cameraBuilder.build()), 400)
         }
     }
+
+
+    fun zoomToRoute(route: List<LatLng>) {
+        if (!::map.isInitialized || route.isEmpty()) {
+            return
+        }
+
+        // Create a LatLngBounds object that includes all points of the route
+        val builder = org.maplibre.android.geometry.LatLngBounds.Builder()
+        route.forEach {
+            builder.include(it)
+        }
+        val bounds = builder.build()
+
+        // Animate the camera to show the entire route with padding
+        map.animateCamera(CameraUpdateFactory.newLatLngBounds(bounds, 100), 1000)
+    }
+
 }
