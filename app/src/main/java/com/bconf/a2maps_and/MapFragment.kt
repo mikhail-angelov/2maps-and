@@ -49,8 +49,6 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, OnMapReadyCa
 
     private var longPressedLatLng: LatLng? = null
     private val ID_MENU_NAVIGATE = 1
-
-    private var lastKnownLocation: android.location.Location? = null
     private var fabCenterOnLocation: FloatingActionButton? = null // Reference for the new FAB
     private var isUserPanning = false
     private var currentLocationSource: GeoJsonSource? = null
@@ -59,8 +57,6 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, OnMapReadyCa
        private val ROUTE_SOURCE_ID = "route-source"
     private val ROUTE_LAYER_ID = "route-layer"
     private var routeSource: GeoJsonSource? = null
-
-    private var maneuverTextView: MaterialTextView? = null
     private var maneuverTextViewInFragment: TextView? = null
     private var navigationInfoPanel: View? = null
     private var remainingDistanceTextView: TextView? = null
@@ -99,7 +95,9 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, OnMapReadyCa
             navigationViewModel.lastKnownGpsLocation.value?.let { location ->
                 val currentLatLng = org.maplibre.android.geometry.LatLng(location.latitude, location.longitude)
                 val cameraBuilder = CameraPosition.Builder().target(currentLatLng)
-                    .zoom(map.cameraPosition.zoom.coerceAtLeast(15.0)).tilt(0.0)
+                    .zoom(map.cameraPosition.zoom.coerceAtLeast(15.0))
+                    .padding(0.0, 0.0, 0.0, 0.0)
+                    .tilt(0.0)
 
                 map.animateCamera(CameraUpdateFactory.newCameraPosition(cameraBuilder.build()), 600)
             } ?: run {
@@ -115,7 +113,7 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, OnMapReadyCa
         // Basic map setup, can be expanded or configured via listener
         map.cameraPosition = CameraPosition.Builder()
             .target(LatLng(56.292374, 43.985402)) // Default position
-            .zoom(10.0) // Default zoom
+            .zoom(13.0) // Default zoom
             .tilt(0.0)
             .build()
         map.addOnCameraIdleListener {
@@ -139,7 +137,7 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, OnMapReadyCa
         }
         viewLifecycleOwner.lifecycleScope.launch {
             navigationViewModel.currentDisplayedPath.collectLatest { pathSegment ->
-                drawRouteSegmentOnMapUI(pathSegment) // Your existing method
+                drawRouteSegmentOnMapUI(pathSegment)
             }
         }
         viewLifecycleOwner.lifecycleScope.launch {
@@ -396,12 +394,19 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, OnMapReadyCa
                     navigationViewModel.navigationState.value == NavigationState.OFF_ROUTE) && !isUserPanning
         ) {
 
+            // Calculate padding to shift the location 100px from the bottom
+            val bottomPaddingPx = 2000f
+            val density = resources.displayMetrics.density
+            val topPaddingDp = (bottomPaddingPx / density).toDouble()
+
+
             // When navigating, camera should follow the user's location and bearing
             val cameraBuilder = CameraPosition.Builder()
                 .target(LatLng(location.latitude, location.longitude))
                 .zoom(map.cameraPosition.zoom.coerceAtLeast(16.0)) // Higher zoom during nav
                 .tilt(45.0) // Tilted view
                 .bearing(location.bearing.toDouble()) // Follow user's direction
+                .padding(0.0, topPaddingDp, 0.0, 0.0)
 
             map.animateCamera(CameraUpdateFactory.newCameraPosition(cameraBuilder.build()), 400)
         }

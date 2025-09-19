@@ -9,20 +9,16 @@ import androidx.lifecycle.viewModelScope
 import com.bconf.a2maps_and.service.NavigationEngineService // Your service
 import com.bconf.a2maps_and.navigation.NavigationState
 import com.bconf.a2maps_and.repository.RouteRepository
-import com.bconf.a2maps_and.routing.Maneuver
 import com.bconf.a2maps_and.routing.ValhallaLocation
 import com.bconf.a2maps_and.routing.ValhallaRouteResponse
 import com.google.gson.Gson
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import org.maplibre.android.geometry.LatLng
 import android.location.Location
-import androidx.compose.ui.text.intl.Locale
 import com.bconf.a2maps_and.navigation.ActiveManeuverDetails
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
@@ -36,7 +32,7 @@ class NavigationViewModel(application: Application) : AndroidViewModel(applicati
 
 
     val lastKnownGpsLocation: StateFlow<Location> = NavigationEngineService.lastLocation
-    .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), Location(""))
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), Location(""))
 
 
     // --- Observables from LocationService (Navigation Engine) ---
@@ -44,20 +40,23 @@ class NavigationViewModel(application: Application) : AndroidViewModel(applicati
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // Observe the new ActiveManeuverDetails from the service
-    val activeManeuverDetails: StateFlow<ActiveManeuverDetails?> = NavigationEngineService.activeManeuverDetails
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    val activeManeuverDetails: StateFlow<ActiveManeuverDetails?> =
+        NavigationEngineService.activeManeuverDetails
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     val navigationState: StateFlow<NavigationState> = NavigationEngineService.navigationState
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), NavigationState.IDLE)
 
-    val remainingDistance: StateFlow<String> = NavigationEngineService.remainingDistanceInMeters.map { distance ->
-        formatDistanceForDisplay(distance)
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "0.0 m")
+    val remainingDistance: StateFlow<String> =
+        NavigationEngineService.remainingDistanceInMeters.map { distance ->
+            formatDistanceForDisplay(distance)
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "0.0 m")
 
     // --- UI State derived from navigationState and currentManeuver ---
     val maneuverText: StateFlow<String> = activeManeuverDetails.map { details ->
         if (details != null && details.maneuver != null &&
-            (navigationState.value == NavigationState.NAVIGATING || navigationState.value == NavigationState.OFF_ROUTE)) {
+            (navigationState.value == NavigationState.NAVIGATING || navigationState.value == NavigationState.OFF_ROUTE)
+        ) {
 
             val distanceStr = if (details.remainingDistanceToManeuverMeters != null) {
                 formatDistanceForDisplay(details.remainingDistanceToManeuverMeters) // Use a local formatter
@@ -72,7 +71,10 @@ class NavigationViewModel(application: Application) : AndroidViewModel(applicati
             Log.d("NavViewModel", "Formatted maneuverText: '$text'")
             text
         } else {
-            Log.d("NavViewModel", "ManeuverDetails is null or not navigating, emitting blank maneuverText.")
+            Log.d(
+                "NavViewModel",
+                "ManeuverDetails is null or not navigating, emitting blank maneuverText."
+            )
             ""
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
@@ -82,11 +84,13 @@ class NavigationViewModel(application: Application) : AndroidViewModel(applicati
         return if (distanceMeters < 1.0 && distanceMeters > 0) { // for < 1m show cm or "now"
             "Now" // Or String.format("%.0f cm", distanceMeters * 100) but "Now" is common
         } else if (distanceMeters < 10.0) { // Distances like 9.5m
-            String.format("%.0f m", distanceMeters) // Show without decimal for values like 7m, 8m, 9m
-        } else if (distanceMeters < 50.0 && distanceMeters >=10.0) { // For 10m to 49m, round to nearest 5 or 10
+            String.format(
+                "%.0f m",
+                distanceMeters
+            ) // Show without decimal for values like 7m, 8m, 9m
+        } else if (distanceMeters < 50.0 && distanceMeters >= 10.0) { // For 10m to 49m, round to nearest 5 or 10
             String.format("%.0f m", (Math.round(distanceMeters / 5.0) * 5.0))
-        }
-        else if (distanceMeters < 1000.0) { // From 50m up to 999m
+        } else if (distanceMeters < 1000.0) { // From 50m up to 999m
             // Round to nearest 10m for cleaner display (e.g., 50m, 60m, not 53m)
             String.format("%.0f m", (Math.round(distanceMeters / 10.0) * 10.0))
         } else { // Kilometers
@@ -116,7 +120,8 @@ class NavigationViewModel(application: Application) : AndroidViewModel(applicati
                 try {
                     // Wait for a non-null location, with a timeout
                     currentGpsLocation = withTimeoutOrNull(15000) { // Timeout after 15 seconds
-                        lastKnownGpsLocation.filterNotNull().first() // Suspends until a non-null value is emitted
+                        lastKnownGpsLocation.filterNotNull()
+                            .first() // Suspends until a non-null value is emitted
                     }
 
                     if (currentGpsLocation == null) {
@@ -127,7 +132,11 @@ class NavigationViewModel(application: Application) : AndroidViewModel(applicati
                     }
                     Log.d("NavigationViewModel", "Acquired GPS location: $currentGpsLocation")
                 } catch (e: Exception) { // Catch any other exception during waiting
-                    Log.e("NavigationViewModel", "Error while waiting for GPS location: ${e.message}", e)
+                    Log.e(
+                        "NavigationViewModel",
+                        "Error while waiting for GPS location: ${e.message}",
+                        e
+                    )
 //                    NavigationEngineService._navigationState.value = NavigationState.ROUTE_CALCULATION_FAILED
                     return@launch
                 }
@@ -136,7 +145,10 @@ class NavigationViewModel(application: Application) : AndroidViewModel(applicati
             // At this point, currentGpsLocation should be non-null
             val fromLatLng = LatLng(currentGpsLocation.latitude, currentGpsLocation.longitude)
 
-            Log.d("NavigationViewModel", "Requesting route from ${fromLatLng} to ${destinationLatLng}")
+            Log.d(
+                "NavigationViewModel",
+                "Requesting route from ${fromLatLng} to ${destinationLatLng}"
+            )
             val result = routeRepository.getRoute(
                 ValhallaLocation(fromLatLng.latitude, fromLatLng.longitude),
                 ValhallaLocation(destinationLatLng.latitude, destinationLatLng.longitude)
@@ -148,7 +160,10 @@ class NavigationViewModel(application: Application) : AndroidViewModel(applicati
                         Log.i("NavigationViewModel", "Route received, starting navigation service.")
                         startLocationServiceWithRoute(routeResponse, fromLatLng, destinationLatLng)
                     } else {
-                        Log.w("NavigationViewModel", "No route legs in response: ${routeResponse.trip?.status_message}")
+                        Log.w(
+                            "NavigationViewModel",
+                            "No route legs in response: ${routeResponse.trip?.status_message}"
+                        )
 //                        NavigationEngineService._navigationState.value = NavigationState.ROUTE_CALCULATION_FAILED
                     }
                 },
@@ -160,10 +175,17 @@ class NavigationViewModel(application: Application) : AndroidViewModel(applicati
         }
     }
 
-    private fun startLocationServiceWithRoute(routeResponse: ValhallaRouteResponse, fromPoint: LatLng, toPoint: LatLng) {
+    private fun startLocationServiceWithRoute(
+        routeResponse: ValhallaRouteResponse,
+        fromPoint: LatLng,
+        toPoint: LatLng
+    ) {
         val intent = Intent(app, NavigationEngineService::class.java).apply {
             action = NavigationEngineService.ACTION_START_NAVIGATION
-            putExtra(NavigationEngineService.EXTRA_ROUTE_RESPONSE_JSON, Gson().toJson(routeResponse))
+            putExtra(
+                NavigationEngineService.EXTRA_ROUTE_RESPONSE_JSON,
+                Gson().toJson(routeResponse)
+            )
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             app.startForegroundService(intent)
