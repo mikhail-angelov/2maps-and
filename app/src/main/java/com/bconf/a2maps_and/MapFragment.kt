@@ -13,48 +13,55 @@ import android.view.ViewGroup
 import android.widget.ImageButton
 import android.widget.TextView
 import android.widget.Toast
-import com.google.android.material.floatingactionbutton.FloatingActionButton
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import com.bconf.a2maps_and.navigation.NavigationState
+import com.bconf.a2maps_and.placemark.PlacemarkLayerManager
+import com.bconf.a2maps_and.placemark.PlacemarkService
 import com.bconf.a2maps_and.ui.viewmodel.NavigationViewModel
-import com.google.android.material.textview.MaterialTextView
+import com.google.android.material.floatingactionbutton.FloatingActionButton
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
 import org.maplibre.android.MapLibre
-import org.maplibre.android.maps.MapView
-import org.maplibre.android.maps.MapLibreMap
-import org.maplibre.android.maps.OnMapReadyCallback
-import org.maplibre.android.maps.Style
 import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
+import org.maplibre.android.maps.MapLibreMap
+import org.maplibre.android.maps.MapView
+import org.maplibre.android.maps.OnMapReadyCallback
+import org.maplibre.android.maps.Style
 import org.maplibre.android.style.layers.CircleLayer
 import org.maplibre.android.style.layers.LineLayer
 import org.maplibre.android.style.layers.Property
 import org.maplibre.android.style.layers.PropertyFactory
 import org.maplibre.android.style.sources.GeoJsonSource
+import org.maplibre.geojson.Point
 import java.io.File
 import java.io.IOException
 
 
-class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, OnMapReadyCallback {
+class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.OnMapClickListener,
+    OnMapReadyCallback {
 
-    private lateinit var  navigationViewModel: NavigationViewModel // Shared ViewModel
+    private lateinit var navigationViewModel: NavigationViewModel // Shared ViewModel
     private lateinit var mapView: MapView
-    lateinit var map: MapLibreMap // Made public to be accessible from MainActivity if needed initially
+    private lateinit var map: MapLibreMap // Made public to be accessible from MainActivity if needed initially
+
+    private lateinit var placemarkLayerManager: PlacemarkLayerManager
+    private lateinit var placemarkService: PlacemarkService
 
     private var longPressedLatLng: LatLng? = null
     private val ID_MENU_NAVIGATE = 1
+    private val ID_MENU_ADD_PLACEMARK = 2
     private var fabCenterOnLocation: FloatingActionButton? = null // Reference for the new FAB
     private var isUserPanning = false
     private var currentLocationSource: GeoJsonSource? = null
     private val CURRENT_LOCATION_SOURCE_ID = "current-location-source"
     private val CURRENT_LOCATION_LAYER_ID = "current-location-layer"
-       private val ROUTE_SOURCE_ID = "route-source"
+    private val ROUTE_SOURCE_ID = "route-source"
     private val ROUTE_LAYER_ID = "route-layer"
     private var routeSource: GeoJsonSource? = null
     private var maneuverTextViewInFragment: TextView? = null
@@ -67,6 +74,7 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, OnMapReadyCa
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         navigationViewModel = ViewModelProvider(this).get(NavigationViewModel::class.java)
+        placemarkService = PlacemarkService(requireContext())
         MapLibre.getInstance(requireContext())
     }
 
@@ -93,7 +101,8 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, OnMapReadyCa
         }
         fabCenterOnLocation?.setOnClickListener {
             navigationViewModel.lastKnownGpsLocation.value?.let { location ->
-                val currentLatLng = org.maplibre.android.geometry.LatLng(location.latitude, location.longitude)
+                val currentLatLng =
+                    org.maplibre.android.geometry.LatLng(location.latitude, location.longitude)
                 val cameraBuilder = CameraPosition.Builder().target(currentLatLng)
                     .zoom(map.cameraPosition.zoom.coerceAtLeast(15.0))
                     .padding(0.0, 0.0, 0.0, 0.0)
@@ -101,10 +110,17 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, OnMapReadyCa
 
                 map.animateCamera(CameraUpdateFactory.newCameraPosition(cameraBuilder.build()), 600)
             } ?: run {
-                Toast.makeText(requireContext(), "Current location not available yet.", Toast.LENGTH_SHORT).show()
+                Toast.makeText(
+                    requireContext(),
+                    "Current location not available yet.",
+                    Toast.LENGTH_SHORT
+                ).show()
             }
         }
-        Log.d("MapFragment", "maneuverTextViewInFragment is null: ${maneuverTextViewInFragment == null}") // ADD THIS LOG
+        Log.d(
+            "MapFragment",
+            "maneuverTextViewInFragment is null: ${maneuverTextViewInFragment == null}"
+        ) // ADD THIS LOG
         return view
     }
 
@@ -125,10 +141,15 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, OnMapReadyCa
             }
         }
         map.addOnMapLongClickListener(this)
+        map.addOnMapClickListener(this)
         mapView.let { registerForContextMenu(it) }
 
-        loadInitialMapStyle()
-        setupLocationDisplay()
+        placemarkLayerManager = PlacemarkLayerManager(requireContext(), map, placemarkService)
+        loadInitialMapStyle({ style ->
+            setupLocationDisplay(style)
+            placemarkLayerManager.onStyleLoaded(style)
+        })
+
 
         viewLifecycleOwner.lifecycleScope.launch {
             navigationViewModel.lastKnownGpsLocation.collectLatest { location ->
@@ -145,14 +166,14 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, OnMapReadyCa
                 Log.d("MapFragment", "Received maneuverText from ViewModel: '$text'")
                 maneuverTextViewInFragment?.text = text
                 updateNavigationUi(navigationViewModel.navigationState.value)
-           }
+            }
         }
 
-         viewLifecycleOwner.lifecycleScope.launch {
-             navigationViewModel.remainingDistance.collectLatest { distanceText ->
-                 remainingDistanceTextView?.text = distanceText
-             }
-         }
+        viewLifecycleOwner.lifecycleScope.launch {
+            navigationViewModel.remainingDistance.collectLatest { distanceText ->
+                remainingDistanceTextView?.text = distanceText
+            }
+        }
 
         // Observe navigation state for camera adjustments (e.g., zoom to route on start)
         viewLifecycleOwner.lifecycleScope.launch {
@@ -162,7 +183,7 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, OnMapReadyCa
                 if (navState == NavigationState.NAVIGATING && navigationViewModel.currentDisplayedPath.value.isNotEmpty()) {
                     // Avoid re-zooming if already navigating and path just updated slightly
                     // This logic needs to be smarter, e.g., only zoom on first NAVIGATING state after IDLE
-                    if(map.cameraPosition.zoom < 10) { // Simple check, improve this
+                    if (map.cameraPosition.zoom < 10) { // Simple check, improve this
                         zoomToRoute(navigationViewModel.currentDisplayedPath.value)
                     }
                 }
@@ -171,10 +192,12 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, OnMapReadyCa
     }
 
     private fun updateNavigationUi(navState: NavigationState) {
-        val isNavigatingOrOffRoute = navState == NavigationState.NAVIGATING || navState == NavigationState.OFF_ROUTE
+        val isNavigatingOrOffRoute =
+            navState == NavigationState.NAVIGATING || navState == NavigationState.OFF_ROUTE
 
         navigationInfoPanel?.visibility = if (isNavigatingOrOffRoute) View.VISIBLE else View.GONE
-        rerouteButton?.visibility = if (navState == NavigationState.OFF_ROUTE) View.VISIBLE else View.GONE
+        rerouteButton?.visibility =
+            if (navState == NavigationState.OFF_ROUTE) View.VISIBLE else View.GONE
 
         val maneuverText = maneuverTextViewInFragment?.text
         if (isNavigatingOrOffRoute && !maneuverText.isNullOrBlank()) {
@@ -203,29 +226,31 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, OnMapReadyCa
                 }
             }
 
-     fun loadInitialMapStyle(onStyleLoaded: (() -> Unit)? = null) {
-         if (!::map.isInitialized) return
+    fun loadInitialMapStyle(onStyleLoaded: ((style: Style) -> Unit)? = null) {
+        if (!::map.isInitialized) return
 
         val file = getFileFromAssets(context, "niz-osm.mbtiles")
         Log.i("--files", file.absolutePath)
 
-        val styleJson = context?.assets?.open("bright.json")?.bufferedReader().use { it?.readText() }
+        val styleJson =
+            context?.assets?.open("bright.json")?.bufferedReader().use { it?.readText() }
         if (styleJson == null) {
             Log.e("MapFragment", "Failed to read bright.json")
             return
         }
 
         val updatedStyleJson = styleJson.replace(
-     "\"url\": \"asset://niz-osm.mbtiles\"",
-     "\"url\": \"mbtiles://${file.absolutePath}\"")
+            "\"url\": \"asset://niz-osm.mbtiles\"",
+            "\"url\": \"mbtiles://${file.absolutePath}\""
+        )
 
         map.setStyle(
             Style.Builder().fromJson(updatedStyleJson)
         ) { style ->
             Log.i("MapFragment", "Style loaded.")
-            onStyleLoaded?.invoke()
+            onStyleLoaded?.invoke(style)
         }
-     }
+    }
 
 
     override fun onStart() {
@@ -277,6 +302,20 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, OnMapReadyCa
         return true
     }
 
+    override fun onMapClick(point: LatLng): Boolean {
+        // First, let PlacemarkLayerManager try to handle the click
+        if (placemarkLayerManager.handleMapClick(point)) {
+            return true // Placemark click was handled
+        }
+
+        // If not handled by PlacemarkLayerManager, do other map click logic if any
+        // For example, deselecting something or showing coordinates
+        Log.d("MapFragment", "Map clicked at: Lat ${point.latitude}, Lng ${point.longitude}")
+        // Return false if you want other listeners (if any) to also process this click,
+        // or true if you consider it handled here.
+        return false
+    }
+
     override fun onCreateContextMenu(
         menu: ContextMenu,
         v: View, // This v is the MapView from the fragment
@@ -286,8 +325,10 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, OnMapReadyCa
         // Check the ID of the MapView inside the fragment's layout
         if (v.id == R.id.mapViewInFragment && longPressedLatLng != null) {
             menu.setHeaderTitle("Navigate")
-            val label = if (navigationViewModel.navigationState.value == NavigationState.IDLE) "to this point" else "stop"
+            val label =
+                if (navigationViewModel.navigationState.value == NavigationState.IDLE) "to this point" else "stop"
             menu.add(0, ID_MENU_NAVIGATE, 1, label)
+            menu.add(0, ID_MENU_ADD_PLACEMARK, 1, "add placemark")
         }
     }
 
@@ -297,12 +338,22 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, OnMapReadyCa
             when (item.itemId) {
                 ID_MENU_NAVIGATE -> {
                     // Toast.makeText(requireContext(), "'To' set: $coordinateText", Toast.LENGTH_SHORT).show()
-                    Log.d("MapContextMenu", "Navigate to point: $coordinateText : ${navigationViewModel.navigationState.value}")
+                    Log.d(
+                        "MapContextMenu",
+                        "Navigate to point: $coordinateText : ${navigationViewModel.navigationState.value}"
+                    )
                     if (navigationViewModel.navigationState.value == NavigationState.IDLE) {
                         navigationViewModel.requestNavigationTo(coords) // ViewModel handles the rest
-                    }else{
+                    } else {
                         navigationViewModel.stopNavigation()
                     }
+                    return true
+                }
+
+                ID_MENU_ADD_PLACEMARK -> {
+                    // Toast.makeText(requireContext(), "'To' set: $coordinateText", Toast.LENGTH_SHORT).show()
+                    Log.d("MapContextMenu", "add placemark")
+                    placemarkLayerManager.showAddPlacemarkDialog(coords)
                     return true
                 }
             }
@@ -356,18 +407,18 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, OnMapReadyCa
     }
 
 
-    private fun setupLocationDisplay() {
-        map.getStyle { style ->
-            // Check if source and layer already exist
-            if (style.getSource(CURRENT_LOCATION_SOURCE_ID) == null) {
-                currentLocationSource = GeoJsonSource(CURRENT_LOCATION_SOURCE_ID)
-                style.addSource(currentLocationSource!!)
-            } else {
-                currentLocationSource = style.getSource(CURRENT_LOCATION_SOURCE_ID) as GeoJsonSource
-            }
+    private fun setupLocationDisplay(style: Style) {
+        // Check if source and layer already exist
+        if (style.getSource(CURRENT_LOCATION_SOURCE_ID) == null) {
+            currentLocationSource = GeoJsonSource(CURRENT_LOCATION_SOURCE_ID)
+            style.addSource(currentLocationSource!!)
+        } else {
+            currentLocationSource = style.getSource(CURRENT_LOCATION_SOURCE_ID) as GeoJsonSource
+        }
 
-            if (style.getLayer(CURRENT_LOCATION_LAYER_ID) == null) {
-                val locationLayer = CircleLayer(CURRENT_LOCATION_LAYER_ID, CURRENT_LOCATION_SOURCE_ID).apply {
+        if (style.getLayer(CURRENT_LOCATION_LAYER_ID) == null) {
+            val locationLayer =
+                CircleLayer(CURRENT_LOCATION_LAYER_ID, CURRENT_LOCATION_SOURCE_ID).apply {
                     setProperties(
                         PropertyFactory.circleColor(Color.BLUE),
                         PropertyFactory.circleRadius(8f),
@@ -375,8 +426,7 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, OnMapReadyCa
                         PropertyFactory.circleStrokeWidth(2f)
                     )
                 }
-                style.addLayer(locationLayer)
-            }
+            style.addLayer(locationLayer)
         }
     }
 
@@ -384,11 +434,8 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, OnMapReadyCa
         location: Location
     ) {
         if (!::map.isInitialized || currentLocationSource == null) return
-        val pointJson = JSONObject().apply {
-            put("type", "Point")
-            put("coordinates", JSONArray().put(location.longitude).put(location.latitude))
-        }
-        currentLocationSource?.setGeoJson(pointJson.toString())
+        val point = Point.fromLngLat(location.longitude, location.latitude)
+        currentLocationSource?.setGeoJson(point)
 
         if ((navigationViewModel.navigationState.value == NavigationState.NAVIGATING ||
                     navigationViewModel.navigationState.value == NavigationState.OFF_ROUTE) && !isUserPanning
@@ -430,3 +477,4 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, OnMapReadyCa
     }
 
 }
+

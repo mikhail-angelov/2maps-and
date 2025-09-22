@@ -86,6 +86,8 @@ class NavigationEngineService : Service() {
         const val ACTION_START_LOCATION_SERVICE = "ACTION_START_LOCATION_SERVICE"
         const val ACTION_STOP_LOCATION_SERVICE = "ACTION_STOP_LOCATION_SERVICE"
         const val EXTRA_ROUTE_RESPONSE_JSON = "extra_route_response_json"
+        private const val PREFS_NAME = "NavigationEnginePrefs"
+        private const val KEY_SAVED_ROUTE_RESPONSE = "savedRouteResponse"
 
         private const val LOCATION_UPDATE_INTERVAL = 10000L
         private const val FASTEST_LOCATION_INTERVAL = 5000L
@@ -122,6 +124,8 @@ class NavigationEngineService : Service() {
 
         Log.d("Location", "--- checkGMS." + checkGMS())
         Log.d("Location", "--- checkHMS." + checkHMS())
+
+        restoreNavigationStateIfNecessary()
     }
 
     private fun checkGMS(): Boolean {
@@ -241,15 +245,19 @@ class NavigationEngineService : Service() {
                     try {
                         val routeResponse =
                             Gson().fromJson(routeJson, ValhallaRouteResponse::class.java)
+                        clearSavedNavigationState()
+                        saveNavigationState(routeResponse)
                         startNavigationLogic(routeResponse)
                         startLocationUpdates()
                     } catch (e: Exception) {
                         Log.e("NavigationEngineService", "Error parsing route for navigation", e)
                         _navigationState.value = NavigationState.ROUTE_CALCULATION_FAILED
+                        clearSavedNavigationState()
                     }
                 } else {
                     Log.e("NavigationEngineService", "Route JSON was null for START_NAVIGATION")
                     _navigationState.value = NavigationState.ROUTE_CALCULATION_FAILED
+                    clearSavedNavigationState()
                 }
             }
 
@@ -639,14 +647,15 @@ class NavigationEngineService : Service() {
         serviceScope.launch {
             Log.d("NavigationEngineService", "Stopping Navigation Logic.")
             gpxLogger.stopGpxLogging()
-            stopLocationUpdates()
+            _navigationState.value = NavigationState.IDLE
+            _currentDisplayedPath.value = emptyList()
+            _activeManeuverDetails.value = null
+            _remainingDistanceInMeters.value = 0.0
             originalFullRoutePath = emptyList()
             originalManeuvers = emptyList()
             currentSnappedShapeIndex = 0
-            _currentDisplayedPath.value = emptyList()
-            _activeManeuverDetails.value = null
-            _navigationState.value = NavigationState.IDLE
-            _remainingDistanceInMeters.value = 0.0
+
+            clearSavedNavigationState()
             updateNotificationText("Navigation stopped.")
             stopForeground(true)
             stopSelf()
@@ -729,6 +738,40 @@ class NavigationEngineService : Service() {
             )
             val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
             manager.createNotificationChannel(serviceChannel)
+        }
+    }
+    private fun saveNavigationState(routeResponse: ValhallaRouteResponse) {
+        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit()
+        val routeJson = Gson().toJson(routeResponse)
+        prefs.putString(KEY_SAVED_ROUTE_RESPONSE, routeJson)
+
+        prefs.apply()
+    }
+
+    private fun clearSavedNavigationState() {
+        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit()
+        prefs.remove(KEY_SAVED_ROUTE_RESPONSE)
+        prefs.apply()
+        Log.d("NavigationEngineService", "Cleared saved navigation state from SharedPreferences.")
+    }
+
+    private fun restoreNavigationStateIfNecessary() {
+        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val routeJson = prefs.getString(KEY_SAVED_ROUTE_RESPONSE, null)
+
+        if (routeJson != null) {
+            Log.i("NavigationEngineService", "Restoring navigation state from SharedPreferences.")
+            val restoredRouteResponse =
+                Gson().fromJson(routeJson, ValhallaRouteResponse::class.java)
+
+            startNavigationLogic(restoredRouteResponse)
+            _navigationState.value = NavigationState.NAVIGATING
+            startLocationUpdates()
+            startForegroundServiceWithNotification()
+            Log.i("NavigationEngineService", "Navigation state restored. Current state: ${_navigationState.value}")
+
+        } else {
+            Log.d("NavigationEngineService", "No saved route shape found or was not navigating, not restoring.")
         }
     }
 

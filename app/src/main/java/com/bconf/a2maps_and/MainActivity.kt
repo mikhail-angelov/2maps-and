@@ -16,7 +16,6 @@ import androidx.lifecycle.lifecycleScope
 import com.bconf.a2maps_and.navigation.NavigationState
 import com.bconf.a2maps_and.service.NavigationEngineService
 import com.bconf.a2maps_and.ui.viewmodel.NavigationViewModel
-import com.google.android.material.floatingactionbutton.FloatingActionButton
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
@@ -124,16 +123,16 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-         checkLocationPermissionsAndStartUpdates() // This is now called after map is ready
+         checkLocationPermissionsAndStartUpdates()
     }
 
     override fun onPause() {
         super.onPause()
         window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        stopLocationService() 
     }
     
     override fun onDestroy() {
         super.onDestroy()
+        stopLocationService()
     }
 }
