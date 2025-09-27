@@ -16,6 +16,7 @@ import android.widget.Toast
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
+import androidx.navigation.fragment.findNavController
 import com.bconf.a2maps_and.navigation.NavigationState
 import com.bconf.a2maps_and.placemark.PlacemarkLayerManager
 import com.bconf.a2maps_and.placemark.PlacemarkService
@@ -69,6 +70,7 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
     private var remainingDistanceTextView: TextView? = null
     private var stopNavigationButton: ImageButton? = null
     private var rerouteButton: ImageButton? = null
+    private var mainMenuButton: FloatingActionButton? = null
 
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -92,6 +94,11 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         stopNavigationButton = view.findViewById(R.id.stopNavigationButton)
         rerouteButton = view.findViewById(R.id.rerouteButton)
         fabCenterOnLocation = view.findViewById(R.id.fabCenterOnLocationInFragment)
+        mainMenuButton = view.findViewById(R.id.mainMenuButton) // Initialize mainMenuButton
+
+        mainMenuButton?.setOnClickListener { // Set click listener
+            findNavController().navigate(R.id.action_mapFragment_to_mainMenuFragment)
+        }
 
         rerouteButton?.setOnClickListener {
             navigationViewModel.recalculateRoute()
@@ -101,8 +108,7 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         }
         fabCenterOnLocation?.setOnClickListener {
             navigationViewModel.lastKnownGpsLocation.value?.let { location ->
-                val currentLatLng =
-                    org.maplibre.android.geometry.LatLng(location.latitude, location.longitude)
+                val currentLatLng = LatLng(location.latitude, location.longitude)
                 val cameraBuilder = CameraPosition.Builder().target(currentLatLng)
                     .zoom(map.cameraPosition.zoom.coerceAtLeast(15.0))
                     .padding(0.0, 0.0, 0.0, 0.0)
@@ -149,6 +155,17 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
             setupLocationDisplay(style)
             placemarkLayerManager.onStyleLoaded(style)
         })
+        navigationViewModel.lastKnownGpsLocation.value?.let { location ->
+            val lat = if(location.latitude == 0.0) 56.292374 else location.latitude
+            val lng = if(location.longitude == 0.0) 43.985402 else location.longitude
+            val currentLatLng = LatLng(lat,lng)
+            val cameraBuilder = CameraPosition.Builder().target(currentLatLng)
+                .zoom(map.cameraPosition.zoom.coerceAtLeast(15.0))
+                .padding(0.0, 0.0, 0.0, 0.0)
+                .tilt(0.0)
+
+            map.animateCamera(CameraUpdateFactory.newCameraPosition(cameraBuilder.build()), 600)
+        }
 
 
         viewLifecycleOwner.lifecycleScope.launch {
@@ -206,6 +223,11 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
             maneuverTextViewInFragment?.visibility = View.GONE
         }
         fabCenterOnLocation?.visibility = if (navState == NavigationState.IDLE) {
+            View.VISIBLE
+        } else {
+            View.GONE
+        }
+        mainMenuButton?.visibility = if (navState == NavigationState.IDLE) {
             View.VISIBLE
         } else {
             View.GONE

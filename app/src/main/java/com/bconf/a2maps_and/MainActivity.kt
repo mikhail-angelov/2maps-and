@@ -7,12 +7,18 @@ import android.os.Build
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.util.Log
+import android.view.View
 import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.widget.Toolbar // Import Toolbar
 import androidx.core.app.ActivityCompat
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
+import androidx.navigation.NavController
+import androidx.navigation.fragment.NavHostFragment
+import androidx.navigation.ui.AppBarConfiguration
+import androidx.navigation.ui.NavigationUI
 import com.bconf.a2maps_and.navigation.NavigationState
 import com.bconf.a2maps_and.service.NavigationEngineService
 import com.bconf.a2maps_and.ui.viewmodel.NavigationViewModel
@@ -22,12 +28,46 @@ import kotlinx.coroutines.launch
 class MainActivity : AppCompatActivity() {
 
     private lateinit var navigationViewModel: NavigationViewModel
+    private lateinit var navController: NavController
+    private lateinit var appBarConfiguration: AppBarConfiguration
+    private lateinit var toolbar: Toolbar // Make Toolbar a class variable
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         navigationViewModel = ViewModelProvider(this).get(NavigationViewModel::class.java)
         setContentView(R.layout.activity_main)
+
+        // Find the Toolbar
+        toolbar = findViewById(R.id.toolbar) // Initialize class variable
+        // Set the Toolbar as the ActionBar
+        setSupportActionBar(toolbar)
+
+        val navHostFragment = supportFragmentManager
+            .findFragmentById(R.id.nav_host_fragment) as NavHostFragment
+        navController = navHostFragment.navController
+
+        // Define AppBarConfiguration. This links the NavController to the ActionBar.
+        // R.id.mapFragment is a top-level destination, so it won't show a back arrow.
+        // Other fragments like MainMenuFragment will show a back arrow.
+        appBarConfiguration = AppBarConfiguration(setOf(R.id.mapFragment))
+        // Setup the ActionBar with NavController
+        NavigationUI.setupActionBarWithNavController(this, navController, appBarConfiguration)
+
+        // Add OnDestinationChangedListener
+        navController.addOnDestinationChangedListener { _, destination, _ ->
+            if (destination.id == R.id.mapFragment) {
+                toolbar.visibility = View.GONE
+            } else {
+                toolbar.visibility = View.VISIBLE
+            }
+        }
+
         observeViewModel()
+    }
+
+    override fun onSupportNavigateUp(): Boolean {
+        // Handle the Up button press, navigateUp will use appBarConfiguration
+        return NavigationUI.navigateUp(navController, appBarConfiguration) || super.onSupportNavigateUp()
     }
 
     private fun observeViewModel() {
