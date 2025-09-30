@@ -10,6 +10,18 @@
         android:name="com.bconf.a2maps_and.MapFragment"
         android:label="MapFragment"
         tools:layout="@layout/fragment_map">
+        <argument
+            android:name="placemarkLat"
+            app:argType="float"
+            android:defaultValue="999.0" />
+        <argument
+            android:name="placemarkLng"
+            app:argType="float"
+            android:defaultValue="999.0" />
+        <argument
+            android:name="placemarkId"
+            app:argType="string"
+            android:defaultValue="" />
         <action
             android:id="@+id/action_mapFragment_to_mainMenuFragment"
             app:destination="@id/mainMenuFragment" />
@@ -32,4 +44,7 @@
         android:name="com.bconf.a2maps_and.placemark.PlacemarksFragment"
         android:label="Placemarks"
         tools:layout="@layout/fragment_placemarks" />
+        <action
+            android:id="@+id/action_placemarksFragment_to_mapFragment"
+            app:destination="@id/mapFragment" />
 </navigation>

@@ -18,6 +18,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
+import androidx.navigation.fragment.navArgs
 import com.bconf.a2maps_and.navigation.NavigationState
 import com.bconf.a2maps_and.placemark.Placemark
 import com.bconf.a2maps_and.placemark.PlacemarkLayerManager
@@ -74,6 +75,10 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
     private var stopNavigationButton: ImageButton? = null
     private var rerouteButton: ImageButton? = null
     private var mainMenuButton: FloatingActionButton? = null
+    private val args: MapFragmentArgs by navArgs()
+    private var initialPlacemarkLat: Float = 999.0F // Use the same "no value" default
+    private var initialPlacemarkLng: Float = 999.0F // Use the same "no value" default
+    private var initialPlacemarkId: String = ""
 
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -81,6 +86,13 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         navigationViewModel = ViewModelProvider(this).get(NavigationViewModel::class.java)
         placemarkViewModel = ViewModelProvider(this).get(PlacemarksViewModel::class.java)
         MapLibre.getInstance(requireContext())
+
+        initialPlacemarkLat = args.placemarkLat
+        initialPlacemarkLng = args.placemarkLng
+        initialPlacemarkId = args.placemarkId
+
+        Log.d("MapFragment", "Received args: Lat=$initialPlacemarkLat, Lng=$initialPlacemarkLng, ID=$initialPlacemarkId")
+
     }
 
     override fun onCreateView(
@@ -136,11 +148,7 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
     override fun onMapReady(mapLibreMap: MapLibreMap) {
         this.map = mapLibreMap
         // Basic map setup, can be expanded or configured via listener
-        map.cameraPosition = CameraPosition.Builder()
-            .target(LatLng(56.292374, 43.985402)) // Default position
-            .zoom(13.0) // Default zoom
-            .tilt(0.0)
-            .build()
+
         map.addOnCameraIdleListener {
             isUserPanning = false
         }
@@ -160,8 +168,34 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         loadInitialMapStyle({ style ->
             setupLocationDisplay(style)
             placemarkLayerManager.onStyleLoaded(style)
+
+            if (initialPlacemarkLat != 999.0F && initialPlacemarkLng != 999.0F) {
+                val targetLatLng = LatLng(initialPlacemarkLat.toDouble(), initialPlacemarkLng.toDouble())
+                val cameraPosition = CameraPosition.Builder()
+                    .target(targetLatLng)
+                    .zoom(15.0) // Adjust zoom level as desired
+                    .build()
+                map.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition), 1000) // Animate over 1 second
+                Log.d("MapFragment", "Centering map on: $targetLatLng")
+
+                // Optional: Highlight or show info for this placemark
+                // You might need to tell PlacemarkLayerManager to highlight this specific placemarkId
+                // placemarkLayerManager.highlightPlacemark(initialPlacemarkId)
+            }else {
+                Log.d("MapFragment", "Centering map on default: 56.292374, 43.985402")
+                map.cameraPosition = CameraPosition.Builder()
+                    .target(LatLng(56.292374, 43.985402)) // Default position
+                    .zoom(13.0) // Default zoom
+                    .tilt(0.0)
+                    .build()
+            }
         })
         navigationViewModel.lastKnownGpsLocation.value?.let { location ->
+            if (initialPlacemarkLat != 999.0F && initialPlacemarkLng != 999.0F) {
+                initialPlacemarkLat = 999.0F
+                initialPlacemarkLng = 999.0F
+                return@let
+            }
             val lat = if(location.latitude == 0.0) 56.292374 else location.latitude
             val lng = if(location.longitude == 0.0) 43.985402 else location.longitude
             val currentLatLng = LatLng(lat,lng)

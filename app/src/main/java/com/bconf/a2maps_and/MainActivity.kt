@@ -152,14 +152,14 @@ class MainActivity : AppCompatActivity() {
                 startService(it)
 //            }
         }
-//        Intent(this, PlacemarkService::class.java).also {
-//            it.action = PlacemarkService.ACTION_START
-////             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-////                startForegroundService(it)
-////            } else {
-//            startService(it)
-////            }
-//        }
+        Intent(this, PlacemarkService::class.java).also {
+            it.action = PlacemarkService.ACTION_START
+//             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+//                startForegroundService(it)
+//            } else {
+            startService(it)
+//            }
+        }
     }
 
     private fun stopLocationService() {
