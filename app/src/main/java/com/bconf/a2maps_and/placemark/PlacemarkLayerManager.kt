@@ -11,8 +11,12 @@ import android.widget.LinearLayout
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.core.content.ContextCompat
-import org.json.JSONArray
-import org.json.JSONObject
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
 import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.Style
@@ -28,7 +32,8 @@ import org.maplibre.geojson.Point
 class PlacemarkLayerManager(
     private val context: Context,
     private val map: MapLibreMap,
-    private val placemarkService: PlacemarkService
+    private val placemarksViewModel: PlacemarksViewModel, // Pass in the ViewModel
+    private val lifecycle: Lifecycle
 ) {
 
     companion object {
@@ -43,15 +48,32 @@ class PlacemarkLayerManager(
         const val PROPERTY_RATE = "rate"
     }
 
+
     fun onStyleLoaded(style: Style) {
 //        addPlacemarkIcon(style)
         setupSource(style)
         setupCircleLayer(style)
         setupTextLayer(style)
 //        setupLayer(style)
-        updatePlacemarks()
+
+        observePlacemarks()
+
     }
 
+    private fun observePlacemarks() {
+        // Launch a coroutine that is automatically cancelled when the passed lifecycle is destroyed.
+        // We use lifecycle.repeatOnLifecycle to ensure collection only happens when the
+        // lifecycle is at least in the STARTED state.
+        CoroutineScope(Dispatchers.Main).launch { // Or use a scope provided if this class has its own lifecycle
+            lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                placemarksViewModel.placemarks.collectLatest { placemarks ->
+                    Log.d("PlacemarkManager", "Observed ${placemarks.size} placemarks from ViewModel.")
+                    updatePlacemarks(placemarks)
+                }
+            }
+        }
+
+    }
     fun showAddPlacemarkDialog(coordinates: LatLng) {
         val builder = AlertDialog.Builder(context)
         builder.setTitle("Add New Placemark")
@@ -93,8 +115,7 @@ class PlacemarkLayerManager(
                      description = "",
                      rate = 0,
                 )
-                placemarkService.addPlacemark(newPlacemark)
-                updatePlacemarks() // Refresh the map layer
+                placemarksViewModel.addPlacemark(newPlacemark)
                 Toast.makeText(context, "Placemark '$placemarkName' added", Toast.LENGTH_SHORT).show()
                 dialog.dismiss()
             } else {
@@ -237,8 +258,7 @@ class PlacemarkLayerManager(
         }
     }
 
-    fun updatePlacemarks() {
-        val placemarks = placemarkService.getPlacemarks()
+    fun updatePlacemarks(placemarks: List<Placemark>) {
         Log.d("PlacemarkManager", "Fetched ${placemarks.size} placemarks from service.")
         if (placemarks.isEmpty()) {
             Log.w("PlacemarkManager", "No placemarks to display.")

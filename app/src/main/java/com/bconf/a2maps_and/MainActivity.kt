@@ -20,6 +20,7 @@ import androidx.navigation.fragment.NavHostFragment
 import androidx.navigation.ui.AppBarConfiguration
 import androidx.navigation.ui.NavigationUI
 import com.bconf.a2maps_and.navigation.NavigationState
+import com.bconf.a2maps_and.placemark.PlacemarkService
 import com.bconf.a2maps_and.service.NavigationEngineService
 import com.bconf.a2maps_and.ui.viewmodel.NavigationViewModel
 import kotlinx.coroutines.flow.collectLatest
@@ -33,6 +34,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var toolbar: Toolbar // Make Toolbar a class variable
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        Log.d("MainActivity", "=========start=======")
         super.onCreate(savedInstanceState)
         navigationViewModel = ViewModelProvider(this).get(NavigationViewModel::class.java)
         setContentView(R.layout.activity_main)
@@ -150,6 +152,14 @@ class MainActivity : AppCompatActivity() {
                 startService(it)
 //            }
         }
+//        Intent(this, PlacemarkService::class.java).also {
+//            it.action = PlacemarkService.ACTION_START
+////             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+////                startForegroundService(it)
+////            } else {
+//            startService(it)
+////            }
+//        }
     }
 
     private fun stopLocationService() {

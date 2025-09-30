@@ -29,7 +29,7 @@
 
     <fragment
         android:id="@+id/placemarksFragment"
-        android:name="com.bconf.a2maps_and.PlacemarksFragment"
+        android:name="com.bconf.a2maps_and.placemark.PlacemarksFragment"
         android:label="Placemarks"
         tools:layout="@layout/fragment_placemarks" />
 </navigation>

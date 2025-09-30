@@ -1,5 +1,11 @@
 package com.bconf.a2maps_and.placemark
 
+import android.os.Bundle
+import android.view.LayoutInflater
+import android.view.View
+import android.view.ViewGroup
+import androidx.fragment.app.Fragment
+import com.bconf.a2maps_and.R
 import com.google.gson.annotations.SerializedName
 import org.maplibre.android.geometry.LatLng
 import java.util.UUID

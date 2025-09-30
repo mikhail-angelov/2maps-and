@@ -14,12 +14,15 @@ import android.widget.ImageButton
 import android.widget.TextView
 import android.widget.Toast
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
 import com.bconf.a2maps_and.navigation.NavigationState
+import com.bconf.a2maps_and.placemark.Placemark
 import com.bconf.a2maps_and.placemark.PlacemarkLayerManager
 import com.bconf.a2maps_and.placemark.PlacemarkService
+import com.bconf.a2maps_and.placemark.PlacemarksViewModel
 import com.bconf.a2maps_and.ui.viewmodel.NavigationViewModel
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import kotlinx.coroutines.flow.collectLatest
@@ -52,7 +55,7 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
     private lateinit var map: MapLibreMap // Made public to be accessible from MainActivity if needed initially
 
     private lateinit var placemarkLayerManager: PlacemarkLayerManager
-    private lateinit var placemarkService: PlacemarkService
+    private lateinit var placemarkViewModel: PlacemarksViewModel
 
     private var longPressedLatLng: LatLng? = null
     private val ID_MENU_NAVIGATE = 1
@@ -76,7 +79,7 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         navigationViewModel = ViewModelProvider(this).get(NavigationViewModel::class.java)
-        placemarkService = PlacemarkService(requireContext())
+        placemarkViewModel = ViewModelProvider(this).get(PlacemarksViewModel::class.java)
         MapLibre.getInstance(requireContext())
     }
 
@@ -150,7 +153,10 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         map.addOnMapClickListener(this)
         mapView.let { registerForContextMenu(it) }
 
-        placemarkLayerManager = PlacemarkLayerManager(requireContext(), map, placemarkService)
+        placemarkLayerManager = PlacemarkLayerManager(requireContext(), map,
+            placemarkViewModel,
+            viewLifecycleOwner.lifecycle
+        )
         loadInitialMapStyle({ style ->
             setupLocationDisplay(style)
             placemarkLayerManager.onStyleLoaded(style)
@@ -320,7 +326,7 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
     override fun onMapLongClick(point: LatLng): Boolean {
         if (!::map.isInitialized) return false
         longPressedLatLng = point
-        mapView.showContextMenu() // Use mapView from fragment
+        mapView.showContextMenu()
         return true
     }
 
