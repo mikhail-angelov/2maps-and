@@ -7,47 +7,41 @@ import android.widget.TextView
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
-import com.bconf.a2maps_and.R // Ensure this R is your project's R
-
-// Assuming your Placemark data class is defined in this package or imported
-// data class Placemark(val id: Long, val name: String, val description: String?, val latitude: Double, val longitude: Double, /* ... */)
+import com.bconf.a2maps_and.R
 
 class PlacemarkAdapter(private val onItemClicked: (Placemark) -> Unit) :
-    ListAdapter<Placemark, PlacemarkAdapter.PlacemarkViewHolder>(PlacemarkDiffCallback()) {
+    ListAdapter<PlacemarkDisplayItem, PlacemarkAdapter.PlacemarkViewHolder>(PlacemarkDisplayItemDiffCallback()) {
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): PlacemarkViewHolder {
         val view = LayoutInflater.from(parent.context)
-            .inflate(R.layout.item_placemark, parent, false)
+            .inflate(R.layout.list_item_placemark, parent, false) // Using new layout
         return PlacemarkViewHolder(view)
     }
 
     override fun onBindViewHolder(holder: PlacemarkViewHolder, position: Int) {
-        val placemark = getItem(position)
-        holder.bind(placemark)
+        val displayItem = getItem(position)
+        holder.bind(displayItem)
         holder.itemView.setOnClickListener {
-            onItemClicked(placemark)
+            onItemClicked(displayItem.placemark) // Pass the original Placemark for click handling
         }
     }
 
     class PlacemarkViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
-        private val nameTextView: TextView = itemView.findViewById(R.id.placemarkNameTextView)
-        private val descriptionTextView: TextView = itemView.findViewById(R.id.placemarkDescriptionTextView)
-        private val coordinatesTextView: TextView = itemView.findViewById(R.id.placemarkCoordinatesTextView)
+        private val nameTextView: TextView = itemView.findViewById(R.id.placemark_name)
+        private val distanceTextView: TextView = itemView.findViewById(R.id.placemark_distance)
 
-        fun bind(placemark: Placemark) {
-            nameTextView.text = placemark.name
-            descriptionTextView.text = placemark.description ?: "No description"
-            val coordinates = "Lat: ${String.format("%.4f", placemark.latitude)}, Lng: ${String.format("%.4f", placemark.longitude)}"
-            coordinatesTextView.text = coordinates
+        fun bind(displayItem: PlacemarkDisplayItem) {
+            nameTextView.text = displayItem.placemark.name
+            distanceTextView.text = displayItem.distanceString
         }
     }
 
-    class PlacemarkDiffCallback : DiffUtil.ItemCallback<Placemark>() {
-        override fun areItemsTheSame(oldItem: Placemark, newItem: Placemark): Boolean {
-            return oldItem.id == newItem.id // Assuming 'id' is a unique identifier
+    class PlacemarkDisplayItemDiffCallback : DiffUtil.ItemCallback<PlacemarkDisplayItem>() {
+        override fun areItemsTheSame(oldItem: PlacemarkDisplayItem, newItem: PlacemarkDisplayItem): Boolean {
+            return oldItem.placemark.id == newItem.placemark.id // Compare by original placemark ID
         }
 
-        override fun areContentsTheSame(oldItem: Placemark, newItem: Placemark): Boolean {
+        override fun areContentsTheSame(oldItem: PlacemarkDisplayItem, newItem: PlacemarkDisplayItem): Boolean {
             return oldItem == newItem
         }
     }

@@ -51,11 +51,11 @@ import java.io.IOException
 class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.OnMapClickListener,
     OnMapReadyCallback {
 
-    private lateinit var navigationViewModel: NavigationViewModel // Shared ViewModel
     private lateinit var mapView: MapView
     private lateinit var map: MapLibreMap // Made public to be accessible from MainActivity if needed initially
 
     private lateinit var placemarkLayerManager: PlacemarkLayerManager
+    private lateinit var navigationViewModel: NavigationViewModel
     private lateinit var placemarkViewModel: PlacemarksViewModel
 
     private var longPressedLatLng: LatLng? = null

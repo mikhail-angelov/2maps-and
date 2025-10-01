@@ -66,7 +66,7 @@ class PlacemarkLayerManager(
         // lifecycle is at least in the STARTED state.
         CoroutineScope(Dispatchers.Main).launch { // Or use a scope provided if this class has its own lifecycle
             lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                placemarksViewModel.placemarks.collectLatest { placemarks ->
+                placemarksViewModel.displayItems.collectLatest { placemarks ->
                     Log.d("PlacemarkManager", "Observed ${placemarks.size} placemarks from ViewModel.")
                     updatePlacemarks(placemarks)
                 }
@@ -258,7 +258,7 @@ class PlacemarkLayerManager(
         }
     }
 
-    fun updatePlacemarks(placemarks: List<Placemark>) {
+    fun updatePlacemarks(placemarks: List<PlacemarkDisplayItem>) {
         Log.d("PlacemarkManager", "Fetched ${placemarks.size} placemarks from service.")
         if (placemarks.isEmpty()) {
             Log.w("PlacemarkManager", "No placemarks to display.")
@@ -270,7 +270,8 @@ class PlacemarkLayerManager(
             return // Exit early
         }
 
-        val features: List<Feature> = placemarks.mapNotNull { placemark -> // Use mapNotNull
+        val features: List<Feature> = placemarks.mapNotNull { p -> // Use mapNotNull
+            val placemark = p.placemark
             try {
                 // Ensure longitude and latitude are valid numbers
                 if (placemark.longitude.isNaN() || placemark.latitude.isNaN()) {

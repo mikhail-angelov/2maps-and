@@ -13,16 +13,17 @@ import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.bconf.a2maps_and.databinding.FragmentPlacemarksBinding
+import com.bconf.a2maps_and.ui.viewmodel.NavigationViewModel
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
 class PlacemarksFragment : Fragment() {
 
     private var _binding: FragmentPlacemarksBinding? = null
-    private val binding get() = _binding!! // This property is only valid between onCreateView and onDestroyView.
+    private val binding get() = _binding!!
 
     private lateinit var placemarkViewModel: PlacemarksViewModel
-
+    private lateinit var navigationViewModel: NavigationViewModel
     private lateinit var placemarkAdapter: PlacemarkAdapter
 
     override fun onCreateView(
@@ -31,6 +32,8 @@ class PlacemarksFragment : Fragment() {
         savedInstanceState: Bundle?
     ): View {
         placemarkViewModel = ViewModelProvider(this).get(PlacemarksViewModel::class.java)
+        navigationViewModel = ViewModelProvider(this).get(NavigationViewModel::class.java) // Shared with Activity
+
         _binding = FragmentPlacemarksBinding.inflate(inflater, container, false)
         return binding.root
     }
@@ -44,14 +47,11 @@ class PlacemarksFragment : Fragment() {
 
     private fun setupRecyclerView() {
         placemarkAdapter = PlacemarkAdapter { placemark ->
-            // Handle item click - e.g., navigate to a detail screen or show on map
             Toast.makeText(context, "Clicked: ${placemark.name}", Toast.LENGTH_SHORT).show()
-
-            // Use Safe Args to create the navigation action with arguments
             val action = PlacemarksFragmentDirections.actionPlacemarksFragmentToMapFragment(
                 placemarkLat = placemark.latitude.toFloat(),
                 placemarkLng = placemark.longitude.toFloat(),
-                placemarkId = placemark.id // Assuming your Placemark has an 'id'
+                placemarkId = placemark.id
             )
             findNavController().navigate(action)
         }
@@ -63,17 +63,24 @@ class PlacemarksFragment : Fragment() {
 
     private fun observeViewModel() {
         viewLifecycleOwner.lifecycleScope.launch {
-            placemarkViewModel.placemarks.collectLatest { placemarks ->
-                Log.d("PlacemarksFragment", "Updating adapter with ${placemarks.size} placemarks.")
-                placemarkAdapter.submitList(placemarks)
-                binding.emptyView.isVisible = placemarks.isEmpty()
+            navigationViewModel.lastKnownGpsLocation.collectLatest { location ->
+                Log.d("PlacemarksFragment", "Current location updated: $location")
+                placemarkViewModel.updateCurrentLocation(location) // Pass location to PlacemarksViewModel
+            }
+        }
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            placemarkViewModel.displayItems.collectLatest { displayItems ->
+                Log.d("PlacemarksFragment", "Updating adapter with ${displayItems.size} display items.")
+                placemarkAdapter.submitList(displayItems)
+                binding.emptyView.isVisible = displayItems.isEmpty()
             }
         }
     }
 
     override fun onDestroyView() {
         super.onDestroyView()
-        binding.placemarksRecyclerView.adapter = null // Important for RecyclerView cleanup
-        _binding = null // Clear ViewBinding reference
+        binding.placemarksRecyclerView.adapter = null
+        _binding = null
     }
 }
