@@ -74,4 +74,7 @@ class PlacemarksViewModel(application: Application) : AndroidViewModel(applicati
         }
         app.startService(serviceIntent)
     }
+    fun deletePlacemark(id: String) {
+        Log.d("PlacemarksViewModel", "Deleting placemark with ID: $id")
+    }
 }

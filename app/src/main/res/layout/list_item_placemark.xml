@@ -1,21 +1,76 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
-    android:layout_height="wrap_content"
-    android:orientation="vertical"
-    android:padding="4dp">
+    android:layout_height="wrap_content">
 
-    <TextView
-        android:id="@+id/placemark_name"
+    <!-- Background actions (revealed on swipe) -->
+    <LinearLayout
+        android:id="@+id/actions_background"
+        android:layout_width="wrap_content"
+        android:layout_height="match_parent"
+        android:layout_gravity="end"
+        android:orientation="horizontal"
+        android:background="@android:color/darker_gray"> <!-- Optional: background for the actions area -->
+
+        <ImageButton
+            android:id="@+id/center_button"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:src="@drawable/ic_action_center"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Center on map"
+            android:padding="8dp"/>
+
+        <ImageButton
+            android:id="@+id/navigate_button"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:src="@drawable/ic_action_navigate"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Navigate"
+            android:padding="8dp"/>
+
+        <ImageButton
+            android:id="@+id/edit_button"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:src="@drawable/ic_action_edit"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Edit"
+            android:padding="8dp"/>
+
+        <ImageButton
+            android:id="@+id/delete_button"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:src="@drawable/ic_action_delete"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Delete"
+            android:padding="8dp"/>
+    </LinearLayout>
+
+    <!-- Foreground view (swiped by user) -->
+    <LinearLayout
+        android:id="@+id/foreground_view"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:textAppearance="@style/TextAppearance.AppCompat.Medium" />
+        android:orientation="vertical"
+        android:padding="8dp"
+        android:background="?android:attr/colorBackground"> <!-- Important: Opaque background -->
 
-    <TextView
-        android:id="@+id/placemark_distance"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:textAppearance="@style/TextAppearance.AppCompat.Small"
-        android:layout_marginTop="4dp" />
+        <TextView
+            android:id="@+id/placemark_name"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textAppearance="@style/TextAppearance.AppCompat.Medium" />
 
-</LinearLayout>
+        <TextView
+            android:id="@+id/placemark_distance"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textAppearance="@style/TextAppearance.AppCompat.Small"
+            android:layout_marginTop="4dp" />
+
+    </LinearLayout>
+</FrameLayout>

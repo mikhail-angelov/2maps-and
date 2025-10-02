@@ -53,7 +53,7 @@ class PlacemarkLayerManager(
 //        addPlacemarkIcon(style)
         setupSource(style)
         setupCircleLayer(style)
-        setupTextLayer(style)
+//        setupTextLayer(style)
 //        setupLayer(style)
 
         observePlacemarks()
@@ -175,25 +175,6 @@ class PlacemarkLayerManager(
         }
         return false // No placemark feature was clicked
     }
-    private fun addPlacemarkIcon(style: Style) {
-        // Use a standard Android drawable as the placemark icon
-        getBitmapFromVectorDrawable(context, android.R.drawable.ic_dialog_map)?.let {
-            style.addImage(ICON_ID, it)
-        }
-    }
-
-    private fun getBitmapFromVectorDrawable(context: Context, drawableId: Int): Bitmap? {
-        val drawable = ContextCompat.getDrawable(context, drawableId) ?: return null
-        val bitmap = Bitmap.createBitmap(
-            drawable.intrinsicWidth,
-            drawable.intrinsicHeight,
-            Bitmap.Config.ARGB_8888
-        )
-        val canvas = Canvas(bitmap)
-        drawable.setBounds(0, 0, canvas.width, canvas.height)
-        drawable.draw(canvas)
-        return bitmap
-    }
 
     private fun setupSource(style: Style) {
         if (style.getSource(SOURCE_ID) == null) {
@@ -239,27 +220,9 @@ class PlacemarkLayerManager(
         }
     }
 
-    private fun setupLayer(style: Style) {
-        if (style.getLayer(LAYER_ID) == null) {
-            val layer = SymbolLayer(LAYER_ID, SOURCE_ID)
-                .withProperties(
-                    PropertyFactory.iconImage(ICON_ID),
-                    PropertyFactory.iconAllowOverlap(true),
-                    PropertyFactory.iconIgnorePlacement(true),
-                    PropertyFactory.iconSize(1.2f),
-                    PropertyFactory.textField("{name}"),
-                    PropertyFactory.textAnchor(Property.TEXT_ANCHOR_TOP),
-                    PropertyFactory.textOffset(arrayOf(0f, 1.0f)),
-                    PropertyFactory.textColor("#000000"),
-                    PropertyFactory.textHaloColor("#FFFFFF"),
-                    PropertyFactory.textHaloWidth(2f)
-                )
-            style.addLayer(layer)
-        }
-    }
-
     fun updatePlacemarks(placemarks: List<PlacemarkDisplayItem>) {
         Log.d("PlacemarkManager", "Fetched ${placemarks.size} placemarks from service.")
+
         if (placemarks.isEmpty()) {
             Log.w("PlacemarkManager", "No placemarks to display.")
             // Ensure the source is cleared if there are no placemarks
@@ -314,8 +277,12 @@ class PlacemarkLayerManager(
                 Log.e("PlacemarkManager", "GeoJsonSource with ID '$SOURCE_ID' not found!")
                 return@getStyle
             }
-            source.setGeoJson(featureCollection) // This is the line in question
-            Log.d("PlacemarkManager", "GeoJsonSource updated with FeatureCollection.")
+            try {
+                source.setGeoJson(featureCollection) // The line in question
+                Log.d("PlacemarkManager", "GeoJsonSource updated successfully.")
+            } catch (e: Exception) {
+                Log.e("PlacemarkManager", "Exception during source.setGeoJson()", e) // Catch any Java/Kotlin level exceptions
+            }
         }
     }
 

@@ -234,35 +234,38 @@ class NavigationEngineService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Log.d("NavigationEngineService", "onStartCommand, action: ${intent?.action}")
-        val notification = buildNotification("Navigation Service Active")
-        startForeground(NOTIFICATION_ID, notification)
+//        val notification = buildNotification("Navigation Service Active")
+//        startForeground(NOTIFICATION_ID, notification)
 
         when (intent?.action) {
             ACTION_START_NAVIGATION -> {
+                Log.d("NavigationService", "Starting navigation...")
                 rerouteCount = 5
+                    try {
                 val routeJson = intent.getStringExtra(EXTRA_ROUTE_RESPONSE_JSON)
                 if (routeJson != null) {
-                    try {
                         val routeResponse =
                             Gson().fromJson(routeJson, ValhallaRouteResponse::class.java)
                         clearSavedNavigationState()
                         saveNavigationState(routeResponse)
                         startNavigationLogic(routeResponse)
                         startLocationUpdates()
-                    } catch (e: Exception) {
-                        Log.e("NavigationEngineService", "Error parsing route for navigation", e)
-                        _navigationState.value = NavigationState.ROUTE_CALCULATION_FAILED
-                        clearSavedNavigationState()
-                    }
+
                 } else {
                     Log.e("NavigationEngineService", "Route JSON was null for START_NAVIGATION")
                     _navigationState.value = NavigationState.ROUTE_CALCULATION_FAILED
                     clearSavedNavigationState()
                 }
+                    } catch (e: Exception) {
+                        Log.e("NavigationEngineService", "Error parsing route for navigation", e)
+                        _navigationState.value = NavigationState.ROUTE_CALCULATION_FAILED
+                        clearSavedNavigationState()
+                        stopSelf()
+                    }
             }
 
             ACTION_STOP_NAVIGATION -> {
-                stopNavigationLogic()
+                stopNavigationAndService()
             }
 
             ACTION_REROUTE_NAVIGATION -> {
@@ -279,6 +282,23 @@ class NavigationEngineService : Service() {
                 stopLocationUpdates()
                 stopForeground(STOP_FOREGROUND_DETACH)
                 stopSelf()
+            }
+            // Example: Handling when the service is restarted by the system
+            else -> {
+                Log.w("NavigationService", "Received action: ${intent?.action} or service restart.")
+                // If the service is restarted by the system (e.g. START_STICKY)
+                // and you don't have a way to resume navigation state,
+                // it might be best to stop it to prevent running without purpose.
+                // However, this depends on your app's desired behavior for restarts.
+                // For now, let's assume if it's restarted without a clear "start" intent,
+                // and you don't have resume logic, it should stop.
+                if (flags and START_FLAG_REDELIVERY == 0 && intent?.action == null) {
+                    Log.d("NavigationService", "Service likely restarted by system without specific intent, stopping.")
+                    stopNavigationAndService()
+                } else if (intent?.action == null) {
+                    Log.d("NavigationService", "Service started with null action, stopping to be safe.")
+                    stopNavigationAndService()
+                }
             }
         }
         return START_NOT_STICKY
@@ -487,7 +507,7 @@ class NavigationEngineService : Service() {
                     _activeManeuverDetails.value = null
                     _remainingDistanceInMeters.value = 0.0
                     updateNotificationText("Arrived at destination.")
-                    stopNavigationLogic()
+                    stopNavigationAndService()
                     return@launch
                 }
             }
@@ -664,10 +684,10 @@ class NavigationEngineService : Service() {
 
     private fun updateNotificationText(text: String) {
         if (_navigationState.value != NavigationState.IDLE || text == "Navigation stopped.") {
-            val notification = buildNotification(text)
-            val notificationManager =
-                getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            notificationManager.notify(NOTIFICATION_ID, notification)
+//            val notification = buildNotification(text)
+//            val notificationManager =
+//                getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+//            notificationManager.notify(NOTIFICATION_ID, notification)
             Log.d("NavigationEngineService", "Notification updated: $text")
         } else {
             Log.d(
@@ -777,11 +797,47 @@ class NavigationEngineService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
-    override fun onDestroy() {
-        super.onDestroy()
-        serviceScope.cancel()
-        stopLocationUpdates()
+    /**
+     * This method is called when the user removes the task that this service was
+     * started in (e.g., swiping it away from the recent apps list).
+     */
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        Log.d("NavigationService", "Task removed, stopping service.")
+        stopNavigationAndService()
+        super.onTaskRemoved(rootIntent)
+    }
+
+    private fun stopNavigationAndService() {
+        Log.d("NavigationService", "stopNavigationAndService called.")
+        // 1. Stop your actual navigation logic here (e.g., stop location updates, release resources)
+        // Example: myNavigationManager.stop()
+        // Example: fusedLocationClient.removeLocationUpdates(locationCallback)
+
         gpxLogger.stopGpxLogging()
-        Log.d("NavigationEngineService", "onDestroy")
+        _navigationState.value = NavigationState.IDLE
+        _currentDisplayedPath.value = emptyList()
+        _activeManeuverDetails.value = null
+        _remainingDistanceInMeters.value = 0.0
+        originalFullRoutePath = emptyList()
+        originalManeuvers = emptyList()
+        currentSnappedShapeIndex = 0
+
+        clearSavedNavigationState()
+        updateNotificationText("Navigation stopped.")
+
+        // 2. Stop the foreground state and remove the notification
+        stopForeground(true) // Pass true to remove the notification as well
+
+        // 3. Stop the service itself
+        stopSelf()
+        Log.d("NavigationService", "Service definitively stopped.")
+    }
+
+    override fun onDestroy() {
+        Log.d("NavigationService", "onDestroy: Service is being destroyed.")
+        super.onDestroy()
+//        serviceScope.cancel()
+//        stopLocationUpdates()
+//        gpxLogger.stopGpxLogging()
     }
 }
