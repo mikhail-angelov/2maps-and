@@ -1,8 +1,6 @@
 package com.bconf.a2maps_and.placemark
 
 import android.content.Context
-import android.graphics.Bitmap
-import android.graphics.Canvas
 import android.graphics.Color
 import android.text.InputType
 import android.util.Log
@@ -10,7 +8,6 @@ import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
-import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.CoroutineScope
@@ -67,13 +64,17 @@ class PlacemarkLayerManager(
         CoroutineScope(Dispatchers.Main).launch { // Or use a scope provided if this class has its own lifecycle
             lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 placemarksViewModel.displayItems.collectLatest { placemarks ->
-                    Log.d("PlacemarkManager", "Observed ${placemarks.size} placemarks from ViewModel.")
+                    Log.d(
+                        "PlacemarkManager",
+                        "Observed ${placemarks.size} placemarks from ViewModel."
+                    )
                     updatePlacemarks(placemarks)
                 }
             }
         }
 
     }
+
     fun showAddPlacemarkDialog(coordinates: LatLng) {
         val builder = AlertDialog.Builder(context)
         builder.setTitle("Add New Placemark")
@@ -112,11 +113,13 @@ class PlacemarkLayerManager(
                     name = placemarkName,
                     latitude = coordinates.latitude,
                     longitude = coordinates.longitude,
-                     description = "",
-                     rate = 0,
+                    description = "",
+                    rate = 0,
+                    timestamp = System.currentTimeMillis(),
                 )
                 placemarksViewModel.addPlacemark(newPlacemark)
-                Toast.makeText(context, "Placemark '$placemarkName' added", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "Placemark '$placemarkName' added", Toast.LENGTH_SHORT)
+                    .show()
                 dialog.dismiss()
             } else {
                 Toast.makeText(context, "Placemark name cannot be empty", Toast.LENGTH_SHORT).show()
@@ -141,7 +144,8 @@ class PlacemarkLayerManager(
 
             // Retrieve properties from the feature
             val placemarkName = clickedFeature.getStringProperty(PROPERTY_NAME) ?: "N/A"
-            val placemarkDescription = clickedFeature.getStringProperty(PROPERTY_DESCRIPTION) ?: "No description."
+            val placemarkDescription =
+                clickedFeature.getStringProperty(PROPERTY_DESCRIPTION) ?: "No description."
             val placemarkRate = clickedFeature.getNumberProperty(PROPERTY_RATE)?.toInt() ?: 0
             // val placemarkId = clickedFeature.getStringProperty(PROPERTY_PLACEMARK_ID) // If you use IDs
 
@@ -198,9 +202,13 @@ class PlacemarkLayerManager(
                 )
             style.addLayer(circleLayer)
         } else {
-            Log.d("PlacemarkManager", "CircleLayer $CIRCLE_LAYER_ID already exists.") // <--- ADD THIS
+            Log.d(
+                "PlacemarkManager",
+                "CircleLayer $CIRCLE_LAYER_ID already exists."
+            ) // <--- ADD THIS
         }
     }
+
     private fun setupTextLayer(style: Style) {
         if (style.getLayer(TEXT_LAYER_ID) == null) {
             val textLayer = SymbolLayer(TEXT_LAYER_ID, SOURCE_ID)
@@ -212,7 +220,12 @@ class PlacemarkLayerManager(
                     PropertyFactory.textHaloWidth(1.0f),
                     PropertyFactory.textSize(14f),
                     PropertyFactory.textAnchor(Property.TEXT_ANCHOR_BOTTOM), // Anchor text above the circle's center
-                    PropertyFactory.textOffset(arrayOf(0f, 2f)), // Offset text slightly above the circle
+                    PropertyFactory.textOffset(
+                        arrayOf(
+                            0f,
+                            2f
+                        )
+                    ), // Offset text slightly above the circle
                     PropertyFactory.textAllowOverlap(true), // Avoid text disappearing if circles are close
                     PropertyFactory.textIgnorePlacement(true)
                 )
@@ -238,24 +251,37 @@ class PlacemarkLayerManager(
             try {
                 // Ensure longitude and latitude are valid numbers
                 if (placemark.longitude.isNaN() || placemark.latitude.isNaN()) {
-                    Log.e("PlacemarkManager", "Invalid coordinates for placemark: ${placemark.name} - Lat: ${placemark.latitude}, Lng: ${placemark.longitude}")
+                    Log.e(
+                        "PlacemarkManager",
+                        "Invalid coordinates for placemark: ${placemark.name} - Lat: ${placemark.latitude}, Lng: ${placemark.longitude}"
+                    )
                     return@mapNotNull null
                 }
                 val point = Point.fromLngLat(placemark.longitude, placemark.latitude)
                 val feature = Feature.fromGeometry(point)
-                feature.addStringProperty(PROPERTY_NAME, placemark.name ?: "Unnamed") // Handle null name
+                feature.addStringProperty(
+                    PROPERTY_NAME,
+                    placemark.name ?: "Unnamed"
+                ) // Handle null name
                 feature.addStringProperty(PROPERTY_DESCRIPTION, placemark.description ?: "")
                 feature.addNumberProperty(PROPERTY_RATE, placemark.rate ?: 0)
                 feature // Return the valid feature
             } catch (e: Exception) {
-                Log.e("PlacemarkManager", "Error creating feature for placemark: ${placemark.name}", e)
+                Log.e(
+                    "PlacemarkManager",
+                    "Error creating feature for placemark: ${placemark.name}",
+                    e
+                )
                 null // Skip this placemark if there's an error
             }
         }
 
         Log.d("PlacemarkManager", "Number of features created: ${features.size}")
         if (features.isEmpty() && placemarks.isNotEmpty()) {
-            Log.e("PlacemarkManager", "All placemarks resulted in invalid features. Check for coordinate or property errors.")
+            Log.e(
+                "PlacemarkManager",
+                "All placemarks resulted in invalid features. Check for coordinate or property errors."
+            )
             // Clear the source if all features failed
             map.getStyle { style ->
                 val source = style.getSourceAs<GeoJsonSource>(SOURCE_ID)
@@ -269,7 +295,10 @@ class PlacemarkLayerManager(
         }
 
         val featureCollection: FeatureCollection = FeatureCollection.fromFeatures(features)
-        Log.d("PlacemarkManager", "FeatureCollection JSON: ${featureCollection.toJson()}") // Already have this, good!
+        Log.d(
+            "PlacemarkManager",
+            "FeatureCollection JSON: ${featureCollection.toJson()}"
+        ) // Already have this, good!
 
         map.getStyle { style ->
             val source = style.getSourceAs<GeoJsonSource>(SOURCE_ID)
@@ -281,7 +310,11 @@ class PlacemarkLayerManager(
                 source.setGeoJson(featureCollection) // The line in question
                 Log.d("PlacemarkManager", "GeoJsonSource updated successfully.")
             } catch (e: Exception) {
-                Log.e("PlacemarkManager", "Exception during source.setGeoJson()", e) // Catch any Java/Kotlin level exceptions
+                Log.e(
+                    "PlacemarkManager",
+                    "Exception during source.setGeoJson()",
+                    e
+                ) // Catch any Java/Kotlin level exceptions
             }
         }
     }

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <item
+        android:id="@+id/action_import_json"
+        android:icon="@drawable/ic_menu_vector"
+        android:title="Import JSON"
+        app:showAsAction="ifRoom|withText" />
+
+    <!-- Add other menu items here if needed -->
+
+</menu>

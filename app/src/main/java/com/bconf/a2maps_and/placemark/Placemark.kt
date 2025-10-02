@@ -13,10 +13,11 @@ import java.util.UUID
 data class Placemark(
     @SerializedName("id") val id: String = UUID.randomUUID().toString(),
     @SerializedName("name") val name: String,
-    @SerializedName("latitude") val latitude: Double,
-    @SerializedName("longitude") val longitude: Double,
-    @SerializedName("rate") val rate: Int,
-    @SerializedName("description") val description: String
+    @SerializedName("lat") val latitude: Double,
+    @SerializedName("lng") val longitude: Double,
+    @SerializedName("rate") val rate: Int?,
+    @SerializedName("description") val description: String?,
+    @SerializedName("timestamp") val timestamp: Long
 ) {
     @delegate:Transient
     val coordinates: LatLng by lazy { LatLng(latitude, longitude) }
