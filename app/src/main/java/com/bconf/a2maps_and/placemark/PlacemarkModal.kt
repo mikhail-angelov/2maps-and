@@ -6,6 +6,10 @@ import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.EditText
+import android.widget.LinearLayout
+import android.widget.RatingBar
+import android.widget.ScrollView
 import android.widget.Toast
 import androidx.core.os.bundleOf
 import androidx.core.view.isVisible
@@ -13,7 +17,6 @@ import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
-import androidx.navigation.findNavController
 import androidx.navigation.fragment.findNavController
 import com.bconf.a2maps_and.R
 import com.bconf.a2maps_and.databinding.BottomSheetPlacemarkBinding
@@ -65,40 +68,54 @@ class PlacemarkModal : BottomSheetDialogFragment() {
         // This ensures the UI updates if the data changes while the modal is visible.
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                placemarkViewModel.displayItems.collectLatest { displayItems ->
-                    if (displayItems.isEmpty()) {
-                        Log.w(
-                            "PlacemarkModal",
-                            "displayItems flow is empty, cannot find placemark."
-                        )
-                        return@collectLatest
-                    }
+                navigationViewModel.lastKnownGpsLocation.collectLatest { location ->
+                    placemarkViewModel.displayItems.collectLatest { displayItems ->
+                        if (displayItems.isEmpty()) {
+                            Log.w(
+                                "PlacemarkModal",
+                                "displayItems flow is empty, cannot find placemark."
+                            )
+                            return@collectLatest
+                        }
 
-                    Log.d(
-                        "PlacemarkModal",
-                        "Observing ${displayItems.size} items. Searching for ID: $placemarkId"
-                    )
-                    val displayItem = displayItems.find { it.placemark.id == placemarkId }
-
-                    if (displayItem != null) {
-                        bindPlacemarkDetails(displayItem)
-                    } else {
-                        Log.e(
+                        Log.d(
                             "PlacemarkModal",
-                            "Placemark with ID '$placemarkId' not found in displayItems."
+                            "Observing ${displayItems.size} items. Searching for ID: $placemarkId"
                         )
-                        // Optional: show an error message or dismiss the modal
-                        // dismiss()
+                        val displayItem = displayItems.find { it.placemark.id == placemarkId }
+
+                        if (displayItem == null) {
+                            Log.e(
+                                "PlacemarkModal",
+                                "Placemark with ID '$placemarkId' not found in displayItems."
+                            )
+                            // Optional: show an error message or dismiss the modal
+                            Toast.makeText(
+                                requireContext(),
+                                "Placemark not found",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                            dismiss()
+                            return@collectLatest
+                        }
+
+                        bindPlacemarkDetails(displayItem,location)
                     }
                 }
             }
         }
     }
 
-    private fun bindPlacemarkDetails(item: PlacemarkDisplayItem) {
+    private fun bindPlacemarkDetails(item: PlacemarkDisplayItem, location: android.location.Location?) {
         val placemark = item.placemark
+        Log.d(
+            "PlacemarkModal",
+            "Binding details for ${placemark.name}: ${item.distanceString}/${item.distanceInMeters}"
+        )
         binding.placemarkName.text = placemark.name
-        binding.placemarkDistance.text = item.distanceString
+        binding.placemarkRating.rating = placemark.rate?.toFloat() ?: 0f // Set the rating stars
+        val distanceResult = PlacemarkUtils.calculateDistance(location, placemark)
+        binding.placemarkDistance.text = distanceResult.distanceString
 
         if (placemark.description.isNullOrBlank()) {
             binding.placemarkDescription.isVisible = false
@@ -108,18 +125,13 @@ class PlacemarkModal : BottomSheetDialogFragment() {
         }
 
         binding.navigateButton.setOnClickListener {
-            navigationViewModel.requestNavigationTo(LatLng(placemark.latitude, placemark.longitude))
-            dismiss() // Close the bottom sheet after starting navigation
-        }
-        binding.navigateButton.setOnClickListener {
-            Log.d("PlacemarkModal", "Navigate button clicked for ${placemark.name}: ${placemark.latitude}/${placemark.longitude}")
-            dismiss() // Close the modal
+            Log.d("PlacemarkModal", "Navigate button clicked for ${placemark.name}")
             // Navigate to the map screen if not already there
             if (findNavController().currentDestination?.id != R.id.mapFragment) {
                 findNavController().navigate(R.id.mapFragment)
             }
             navigationViewModel.requestNavigationTo(LatLng(placemark.latitude, placemark.longitude))
-
+            dismiss()
         }
 
         // Center on map
@@ -129,23 +141,13 @@ class PlacemarkModal : BottomSheetDialogFragment() {
                 placemarkLng = placemark.longitude.toFloat(),
                 placemarkId = placemark.id
             )
-            // Use the activity's NavController to navigate from the modal
-//            requireActivity().findNavController(R.id.mapFragment).navigate(action)
-//            val action = PlacemarksFragmentDirections.actionPlacemarksFragmentToMapFragment(
-//                placemarkLat = placemark.latitude.toFloat(),
-//                placemarkLng = placemark.longitude.toFloat(),
-//                placemarkId = placemark.id
-//            )
             findNavController().navigate(action)
             dismiss()
         }
 
         // Edit
         binding.editButton.setOnClickListener {
-            // val action = PlacemarksFragmentDirections.actionPlacemarksFragmentToEditPlacemarkFragment(placemark.id)
-            // requireActivity().findNavController(R.id.nav_host_fragment_content_main).navigate(action)
-            Toast.makeText(requireContext(), "Edit not implemented yet!", Toast.LENGTH_SHORT).show()
-            dismiss()
+            showEditDialog(item.placemark)
         }
 
         // Delete
@@ -160,6 +162,74 @@ class PlacemarkModal : BottomSheetDialogFragment() {
                 .setNegativeButton("Cancel", null)
                 .show()
         }
+    }
+
+    private fun showEditDialog(placemark: Placemark) {
+        val builder = AlertDialog.Builder(requireContext())
+        builder.setTitle("Edit Placemark")
+
+        // --- Create the custom layout for the dialog ---
+        val context = requireContext()
+        val layout = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            val padding = (16 * resources.displayMetrics.density).toInt()
+            setPadding(padding, padding, padding, padding)
+        }
+
+        // Input for Name
+        val nameInput = EditText(context).apply {
+            hint = "Name"
+            setText(placemark.name)
+        }
+        layout.addView(nameInput)
+
+        // Input for Description
+        val descriptionInput = EditText(context).apply {
+            hint = "Description"
+            setText(placemark.description)
+        }
+        layout.addView(descriptionInput)
+
+        // Input for Rate (using a RatingBar)
+        val rateInput = RatingBar(context).apply {
+            numStars = 5
+            stepSize = 1.0f
+            rating = placemark.rate?.toFloat() ?: 0f
+            val lp = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+            lp.topMargin = (8 * resources.displayMetrics.density).toInt()
+            layoutParams = lp
+        }
+        layout.addView(rateInput)
+
+        // Put the layout in a ScrollView in case the keyboard covers the fields
+        val scrollView = ScrollView(context)
+        scrollView.addView(layout)
+        builder.setView(scrollView)
+
+        // --- Dialog Buttons ---
+        builder.setPositiveButton("Save") { _, _ ->
+            val updatedName = nameInput.text.toString().trim()
+            val updatedDescription = descriptionInput.text.toString().trim()
+            val updatedRate = rateInput.rating.toInt()
+
+            if (updatedName.isNotEmpty()) {
+                val updatedPlacemark = placemark.copy(
+                    name = updatedName,
+                    description = updatedDescription,
+                    rate = updatedRate
+                )
+                placemarkViewModel.updatePlacemark(updatedPlacemark)
+                dismiss() // Dismiss the modal after saving
+            } else {
+                Toast.makeText(context, "Placemark name cannot be empty", Toast.LENGTH_SHORT).show()
+            }
+        }
+        builder.setNegativeButton("Cancel", null)
+
+        builder.create().show()
     }
 
     override fun onDestroyView() {

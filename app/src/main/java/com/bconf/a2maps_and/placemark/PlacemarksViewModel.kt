@@ -35,30 +35,8 @@ class PlacemarksViewModel(application: Application) : AndroidViewModel(applicati
     val displayItems: StateFlow<List<PlacemarkDisplayItem>> =
         rawPlacemarks.combine(_currentLocation) { placemarks, location ->
             val mappedItems = placemarks.map { placemark ->
-                var distanceString = "N/A"
-                var calculatedDistanceInMeters: Float? = null
-
-                if (location != null) {
-                    val results = FloatArray(1)
-                    try {
-                        Location.distanceBetween(
-                            location.latitude, location.longitude,
-                            placemark.latitude, placemark.longitude,
-                            results
-                        )
-                        calculatedDistanceInMeters = results[0]
-                        distanceString = if (calculatedDistanceInMeters < 1000) {
-                            "${calculatedDistanceInMeters.toInt()} m"
-                        } else {
-                            "${(calculatedDistanceInMeters / 1000).toInt()} km"
-                        }
-                    } catch (e: IllegalArgumentException) {
-                        Log.e("PlacemarksViewModel", "Error calculating distance for ${placemark.name}", e)
-                        distanceString = "Error" // Or "N/A"
-                        calculatedDistanceInMeters = null
-                    }
-                }
-                PlacemarkDisplayItem(placemark, distanceString, calculatedDistanceInMeters)
+                val distanceResult = PlacemarkUtils.calculateDistance(location, placemark)
+                PlacemarkDisplayItem(placemark, distanceResult.distanceString, distanceResult.distanceInMeters)
             }
             // Sort the items
             mappedItems.sortedWith(compareBy {
@@ -74,6 +52,17 @@ class PlacemarksViewModel(application: Application) : AndroidViewModel(applicati
         Log.d("PlacemarksViewModel", "Adding placemark: $placemark")
         val serviceIntent = Intent(app, PlacemarkService::class.java).apply {
             action = PlacemarkService.ACTION_ADD_PLACEMARK
+            putExtra(
+                PlacemarkService.EXTRA_PLACEMARK,
+                Gson().toJson(placemark)
+            )
+        }
+        app.startService(serviceIntent)
+    }
+    fun updatePlacemark(placemark: Placemark) {
+        Log.d("PlacemarksViewModel", "Updating placemark: ${placemark.name}")
+        val serviceIntent = Intent(app, PlacemarkService::class.java).apply {
+            action = PlacemarkService.ACTION_UPDATE_PLACEMARK // You will need to define this action
             putExtra(
                 PlacemarkService.EXTRA_PLACEMARK,
                 Gson().toJson(placemark)

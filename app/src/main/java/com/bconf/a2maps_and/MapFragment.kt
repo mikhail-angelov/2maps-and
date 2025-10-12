@@ -16,7 +16,6 @@ import android.widget.Toast
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.flowWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
@@ -221,7 +220,10 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
             map.animateCamera(CameraUpdateFactory.newCameraPosition(cameraBuilder.build()), 600)
         }
         navigationViewModel.uiEvents
-            .flowWithLifecycle(viewLifecycleOwner.lifecycle, Lifecycle.State.STARTED) // Use STARTED state
+            .flowWithLifecycle(
+                viewLifecycleOwner.lifecycle,
+                Lifecycle.State.STARTED
+            ) // Use STARTED state
             .onEach { event ->
                 // Add a log here to see if events are being received
                 Log.d("MapFragment", "Received UI event: $event")
@@ -285,6 +287,7 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         }
         toast.show()
     }
+
     private fun updateNavigationUi(navState: NavigationState) {
         val isNavigatingOrOffRoute =
             navState == NavigationState.NAVIGATING || navState == NavigationState.OFF_ROUTE

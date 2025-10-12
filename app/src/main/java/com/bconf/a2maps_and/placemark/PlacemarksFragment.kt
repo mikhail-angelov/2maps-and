@@ -2,7 +2,6 @@ package com.bconf.a2maps_and.placemark
 
 import android.app.Activity
 import android.content.Intent
-import android.graphics.Canvas
 import android.net.Uri
 import android.os.Bundle
 import android.util.Log
@@ -15,32 +14,27 @@ import android.view.ViewGroup
 import android.widget.Toast
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.appcompat.app.AlertDialog
 import androidx.core.view.MenuHost
 import androidx.core.view.MenuProvider
 import androidx.core.view.isVisible
 import androidx.fragment.app.Fragment
+import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
-import androidx.navigation.fragment.findNavController
-import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.recyclerview.widget.RecyclerView
 import com.bconf.a2maps_and.R
 import com.bconf.a2maps_and.databinding.FragmentPlacemarksBinding
 import com.bconf.a2maps_and.ui.viewmodel.NavigationViewModel
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
-import org.maplibre.android.geometry.LatLng
 
 class PlacemarksFragment : Fragment() {
 
     private var _binding: FragmentPlacemarksBinding? = null
     private val binding get() = _binding!!
 
-    private lateinit var placemarkViewModel: PlacemarksViewModel
-    private lateinit var navigationViewModel: NavigationViewModel
+    private val placemarkViewModel: PlacemarksViewModel by activityViewModels()
+    private val navigationViewModel: NavigationViewModel by activityViewModels()
     private lateinit var placemarkAdapter: PlacemarkAdapter
     private lateinit var filePickerLauncher: ActivityResultLauncher<Intent>
 
@@ -49,10 +43,6 @@ class PlacemarksFragment : Fragment() {
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View {
-        placemarkViewModel = ViewModelProvider(this).get(PlacemarksViewModel::class.java)
-        navigationViewModel =
-            ViewModelProvider(requireActivity()).get(NavigationViewModel::class.java) // Activity-scoped
-
         filePickerLauncher = registerForActivityResult(
             ActivityResultContracts.StartActivityForResult()
         ) { result ->
@@ -137,7 +127,11 @@ class PlacemarksFragment : Fragment() {
             filePickerLauncher.launch(intent)
         } catch (e: Exception) {
             Log.e("PlacemarksFragment", "Error launching file picker", e)
-            Toast.makeText(requireContext(), "Error opening file picker: ${e.message}", Toast.LENGTH_LONG).show()
+            Toast.makeText(
+                requireContext(),
+                "Error opening file picker: ${e.message}",
+                Toast.LENGTH_LONG
+            ).show()
         }
     }
 
@@ -156,22 +150,35 @@ class PlacemarksFragment : Fragment() {
 
             // For now, just log it and show a toast
             Log.d("PlacemarksFragment", "Successfully opened URI. Ready to process JSON.")
-            Toast.makeText(requireContext(), "JSON file selected: ${uri.lastPathSegment}", Toast.LENGTH_LONG).show()
+            Toast.makeText(
+                requireContext(),
+                "JSON file selected: ${uri.lastPathSegment}",
+                Toast.LENGTH_LONG
+            ).show()
 
             // TODO: Implement the actual JSON parsing and import logic in your ViewModel
 //             Example:
-             viewLifecycleOwner.lifecycleScope.launch {
-                 val success = placemarkViewModel.importPlacemarksFromUri(uri)
-                 if (success) {
-                     Toast.makeText(requireContext(), "Placemarks imported!", Toast.LENGTH_SHORT).show()
-                 } else {
-                     Toast.makeText(requireContext(), "Failed to import placemarks.", Toast.LENGTH_SHORT).show()
-                 }
-             }
+            viewLifecycleOwner.lifecycleScope.launch {
+                val success = placemarkViewModel.importPlacemarksFromUri(uri)
+                if (success) {
+                    Toast.makeText(requireContext(), "Placemarks imported!", Toast.LENGTH_SHORT)
+                        .show()
+                } else {
+                    Toast.makeText(
+                        requireContext(),
+                        "Failed to import placemarks.",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
 
         } catch (e: Exception) {
             Log.e("PlacemarksFragment", "Error handling selected JSON file", e)
-            Toast.makeText(requireContext(), "Error processing file: ${e.message}", Toast.LENGTH_LONG).show()
+            Toast.makeText(
+                requireContext(),
+                "Error processing file: ${e.message}",
+                Toast.LENGTH_LONG
+            ).show()
         }
     }
 

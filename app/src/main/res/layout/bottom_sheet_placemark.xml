@@ -36,6 +36,17 @@
         tools:text="This is a detailed description of the placemark."
         tools:visibility="visible" />
 
+    <RatingBar
+        android:id="@+id/placemarkRating"
+        style="?android:attr/ratingBarStyleSmall"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:isIndicator="true"
+        android:numStars="5"
+        android:stepSize="1"
+        tools:rating="4" />
+
     <!-- Primary Action: Navigate -->
     <com.google.android.material.button.MaterialButton
         android:id="@+id/navigateButton"

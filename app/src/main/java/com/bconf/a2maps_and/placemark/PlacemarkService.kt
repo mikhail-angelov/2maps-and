@@ -58,6 +58,16 @@ class PlacemarkService : Service() {
                     addPlacemark(placemark)
                 }
             }
+            ACTION_UPDATE_PLACEMARK -> {
+                intent.getStringExtra(EXTRA_PLACEMARK)?.let { placemarkJson ->
+                    try {
+                        val updatedPlacemark = Gson().fromJson(placemarkJson, Placemark::class.java)
+                        updatePlacemark(updatedPlacemark)
+                    } catch (e: Exception) {
+                        Log.e("PlacemarkService", "Error deserializing placemark for update", e)
+                    }
+                }
+            }
         }
         return START_NOT_STICKY
     }
