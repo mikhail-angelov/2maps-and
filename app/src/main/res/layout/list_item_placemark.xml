@@ -4,53 +4,6 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content">
 
-    <!-- Background actions (revealed on swipe) -->
-    <LinearLayout
-        android:id="@+id/actions_background"
-        android:layout_width="wrap_content"
-        android:layout_height="match_parent"
-        android:layout_gravity="end"
-        android:orientation="horizontal"
-        android:background="@android:color/darker_gray"> <!-- Optional: background for the actions area -->
-
-        <ImageButton
-            android:id="@+id/center_button"
-            android:layout_width="wrap_content"
-            android:layout_height="match_parent"
-            android:src="@drawable/ic_action_center"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Center on map"
-            android:padding="8dp"/>
-
-        <ImageButton
-            android:id="@+id/navigate_button"
-            android:layout_width="wrap_content"
-            android:layout_height="match_parent"
-            android:src="@drawable/ic_action_navigate"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Navigate"
-            android:padding="8dp"/>
-
-        <ImageButton
-            android:id="@+id/edit_button"
-            android:layout_width="wrap_content"
-            android:layout_height="match_parent"
-            android:src="@drawable/ic_action_edit"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Edit"
-            android:padding="8dp"/>
-
-        <ImageButton
-            android:id="@+id/delete_button"
-            android:layout_width="wrap_content"
-            android:layout_height="match_parent"
-            android:src="@drawable/ic_action_delete"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Delete"
-            android:padding="8dp"/>
-    </LinearLayout>
-
-    <!-- Foreground view (swiped by user) -->
     <LinearLayout
         android:id="@+id/foreground_view"
         android:layout_width="match_parent"

@@ -2,33 +2,39 @@ package com.bconf.a2maps_and.ui.viewmodel
 
 import android.app.Application
 import android.content.Intent
+import android.location.Location
 import android.os.Build
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.bconf.a2maps_and.service.NavigationEngineService // Your service
+import com.bconf.a2maps_and.R
+import com.bconf.a2maps_and.navigation.ActiveManeuverDetails
 import com.bconf.a2maps_and.navigation.NavigationState
 import com.bconf.a2maps_and.repository.RouteRepository
 import com.bconf.a2maps_and.routing.ValhallaLocation
 import com.bconf.a2maps_and.routing.ValhallaRouteResponse
+import com.bconf.a2maps_and.service.NavigationEngineService
 import com.google.gson.Gson
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import org.maplibre.android.geometry.LatLng
-import android.location.Location
-import com.bconf.a2maps_and.navigation.ActiveManeuverDetails
-import kotlinx.coroutines.flow.filterNotNull
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.withTimeoutOrNull
-import kotlin.text.format
 
 class NavigationViewModel(application: Application) : AndroidViewModel(application) {
 
     private val app = application
     private val routeRepository = RouteRepository()
+
+    private val _uiEvents = MutableSharedFlow<UiEvent>()
+    val uiEvents = _uiEvents.asSharedFlow()
+
+    sealed class UiEvent {
+        data class ShowToast(val message: String, val isError: Boolean = false) : UiEvent()
+    }
 
 
     val lastKnownGpsLocation: StateFlow<Location> = NavigationEngineService.lastLocation
@@ -105,41 +111,17 @@ class NavigationViewModel(application: Application) : AndroidViewModel(applicati
 
     fun requestNavigationTo(destinationLatLng: LatLng) {
         viewModelScope.launch {
-            // Indicate that route calculation is starting (optional)
-            // LocationService.navigationState.value = NavigationState.ROUTE_CALCULATION
-
             var currentGpsLocation = lastKnownGpsLocation?.value
 
-            // If current GPS location is null, wait for the next non-null value
             if (currentGpsLocation == null) {
                 Log.d("NavigationViewModel", "Current GPS location is null. Waiting for a fix...")
-                // Show some UI indication that we are waiting for GPS
-                // You might want to emit a specific state for this, e.g., NavigationState.AWAITING_GPS
-                // LocationService.navigationState.value = NavigationState.AWAITING_GPS // Define this state
-
-                try {
-                    // Wait for a non-null location, with a timeout
-                    currentGpsLocation = withTimeoutOrNull(15000) { // Timeout after 15 seconds
-                        lastKnownGpsLocation.filterNotNull()
-                            .first() // Suspends until a non-null value is emitted
-                    }
-
-                    if (currentGpsLocation == null) {
-                        Log.e("NavigationViewModel", "Timed out waiting for GPS location.")
-//                        NavigationEngineService._navigationState.value = NavigationState.ROUTE_CALCULATION_FAILED // Or a new GPS_TIMEOUT state
-                        // Potentially inform UI: "Could not get current location."
-                        return@launch
-                    }
-                    Log.d("NavigationViewModel", "Acquired GPS location: $currentGpsLocation")
-                } catch (e: Exception) { // Catch any other exception during waiting
-                    Log.e(
-                        "NavigationViewModel",
-                        "Error while waiting for GPS location: ${e.message}",
-                        e
+                _uiEvents.emit(
+                    UiEvent.ShowToast(
+                        app.getString(R.string.error_gps_timeout),
+                        isError = true
                     )
-//                    NavigationEngineService._navigationState.value = NavigationState.ROUTE_CALCULATION_FAILED
-                    return@launch
-                }
+                )
+                return@launch
             }
 
             // At this point, currentGpsLocation should be non-null
@@ -164,12 +146,23 @@ class NavigationViewModel(application: Application) : AndroidViewModel(applicati
                             "NavigationViewModel",
                             "No route legs in response: ${routeResponse.trip?.status_message}"
                         )
-//                        NavigationEngineService._navigationState.value = NavigationState.ROUTE_CALCULATION_FAILED
+                        _uiEvents.emit(
+                            UiEvent.ShowToast(
+                                app.getString(R.string.error_no_route_found),
+                                isError = true
+                            )
+                        )
                     }
                 },
                 onFailure = { exception ->
                     Log.e("NavigationViewModel", "Route request failed: ${exception.message}")
-//                    NavigationEngineService._navigationState.value = NavigationState.ROUTE_CALCULATION_FAILED
+                    _uiEvents.emit(
+                        UiEvent.ShowToast(
+                            app.getString(R.string.error_route_request_failed),
+                            isError = true
+                        )
+                    )
+
                 }
             )
         }

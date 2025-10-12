@@ -1,3 +1,6 @@
 <resources>
     <string name="app_name">2maps-and</string>
+    <string name="error_gps_timeout">Could not get current location. Please check GPS and try again.</string>
+    <string name="error_no_route_found">No route could be found to the destination.</string>
+    <string name="error_route_request_failed">Route calculation failed. Please check your connection.</string>
 </resources>

@@ -30,7 +30,8 @@ class PlacemarkLayerManager(
     private val context: Context,
     private val map: MapLibreMap,
     private val placemarksViewModel: PlacemarksViewModel, // Pass in the ViewModel
-    private val lifecycle: Lifecycle
+    private val lifecycle: Lifecycle,
+    private val onPlacemarkClickListener: (String) -> Unit
 ) {
 
     companion object {
@@ -40,6 +41,7 @@ class PlacemarkLayerManager(
         private const val CIRCLE_LAYER_ID = "placemarks-circle-layer"
         private const val TEXT_LAYER_ID = "placemarks-text-layer"
 
+        const val PROPERTY_ID = "id"
         const val PROPERTY_NAME = "name"
         const val PROPERTY_DESCRIPTION = "description"
         const val PROPERTY_RATE = "rate"
@@ -137,45 +139,11 @@ class PlacemarkLayerManager(
     fun handleMapClick(point: LatLng): Boolean {
         val screenPoint = map.projection.toScreenLocation(point)
         // Query features on the specific placemark layer
-        val features = map.queryRenderedFeatures(screenPoint, LAYER_ID)
+        val features = map.queryRenderedFeatures(screenPoint, CIRCLE_LAYER_ID)
 
         if (features.isNotEmpty()) {
             val clickedFeature = features[0] // Get the top-most feature if overlapping
-
-            // Retrieve properties from the feature
-            val placemarkName = clickedFeature.getStringProperty(PROPERTY_NAME) ?: "N/A"
-            val placemarkDescription =
-                clickedFeature.getStringProperty(PROPERTY_DESCRIPTION) ?: "No description."
-            val placemarkRate = clickedFeature.getNumberProperty(PROPERTY_RATE)?.toInt() ?: 0
-            // val placemarkId = clickedFeature.getStringProperty(PROPERTY_PLACEMARK_ID) // If you use IDs
-
-            // Construct the message for the dialog
-            val dialogMessage = StringBuilder()
-            dialogMessage.append("Name: $placemarkName\n")
-            dialogMessage.append("Description: $placemarkDescription\n")
-            dialogMessage.append("Rating: $placemarkRate star(s)")
-            // Add more details if available
-
-            // Show an AlertDialog with the placemark's information
-            AlertDialog.Builder(context)
-                .setTitle("Placemark Details")
-                .setMessage(dialogMessage.toString())
-                .setPositiveButton("OK") { dialog, _ ->
-                    dialog.dismiss()
-                }
-                // Optional: Add more buttons for actions like "Edit" or "Delete"
-                // .setNegativeButton("Delete") { _, _ ->
-                //     // Handle delete action, potentially using placemarkId
-                //     Toast.makeText(context, "Delete: $placemarkName", Toast.LENGTH_SHORT).show()
-                // }
-                // .setNeutralButton("Edit") { _, _ ->
-                //    // Handle edit action
-                //    Toast.makeText(context, "Edit: $placemarkName", Toast.LENGTH_SHORT).show()
-                // }
-                .create() // Create the dialog
-                .show()   // Show the dialog
-
-            return true // Signify that the click was handled
+            return onPlacemarkClicked(clickedFeature)
         }
         return false // No placemark feature was clicked
     }
@@ -259,6 +227,7 @@ class PlacemarkLayerManager(
                 }
                 val point = Point.fromLngLat(placemark.longitude, placemark.latitude)
                 val feature = Feature.fromGeometry(point)
+                feature.addStringProperty(PROPERTY_ID, placemark.id)
                 feature.addStringProperty(
                     PROPERTY_NAME,
                     placemark.name ?: "Unnamed"
@@ -317,6 +286,14 @@ class PlacemarkLayerManager(
                 ) // Catch any Java/Kotlin level exceptions
             }
         }
+    }
+    private fun onPlacemarkClicked(feature: Feature): Boolean {
+        Log.d("PlacemarkManager", "Clicked on placemark: ${feature.toJson()}")
+        feature.getStringProperty("id")?.let { placemarkId ->
+            onPlacemarkClickListener(placemarkId) // Invoke the callback
+            return true
+        }
+        return false
     }
 
     fun cleanup() {

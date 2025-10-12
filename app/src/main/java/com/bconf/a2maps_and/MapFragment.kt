@@ -14,19 +14,22 @@ import android.widget.ImageButton
 import android.widget.TextView
 import android.widget.Toast
 import androidx.fragment.app.Fragment
+import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.flowWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
 import androidx.navigation.fragment.navArgs
 import com.bconf.a2maps_and.navigation.NavigationState
-import com.bconf.a2maps_and.placemark.Placemark
 import com.bconf.a2maps_and.placemark.PlacemarkLayerManager
-import com.bconf.a2maps_and.placemark.PlacemarkService
+import com.bconf.a2maps_and.placemark.PlacemarkModal
 import com.bconf.a2maps_and.placemark.PlacemarksViewModel
 import com.bconf.a2maps_and.ui.viewmodel.NavigationViewModel
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
@@ -55,8 +58,8 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
     private lateinit var map: MapLibreMap // Made public to be accessible from MainActivity if needed initially
 
     private lateinit var placemarkLayerManager: PlacemarkLayerManager
-    private lateinit var navigationViewModel: NavigationViewModel
-    private lateinit var placemarkViewModel: PlacemarksViewModel
+    private val navigationViewModel: NavigationViewModel by activityViewModels()
+    private val placemarkViewModel: PlacemarksViewModel by activityViewModels()
 
     private var longPressedLatLng: LatLng? = null
     private val ID_MENU_NAVIGATE = 1
@@ -83,15 +86,16 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        navigationViewModel = ViewModelProvider(this).get(NavigationViewModel::class.java)
-        placemarkViewModel = ViewModelProvider(this).get(PlacemarksViewModel::class.java)
         MapLibre.getInstance(requireContext())
 
         initialPlacemarkLat = args.placemarkLat
         initialPlacemarkLng = args.placemarkLng
         initialPlacemarkId = args.placemarkId
 
-        Log.d("MapFragment", "Received args: Lat=$initialPlacemarkLat, Lng=$initialPlacemarkLng, ID=$initialPlacemarkId")
+        Log.d(
+            "MapFragment",
+            "Received args: Lat=$initialPlacemarkLat, Lng=$initialPlacemarkLng, ID=$initialPlacemarkId"
+        )
 
     }
 
@@ -161,27 +165,37 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         map.addOnMapClickListener(this)
         mapView.let { registerForContextMenu(it) }
 
-        placemarkLayerManager = PlacemarkLayerManager(requireContext(), map,
+        placemarkLayerManager = PlacemarkLayerManager(
+            requireContext(), map,
             placemarkViewModel,
-            viewLifecycleOwner.lifecycle
+            viewLifecycleOwner.lifecycle,
+            onPlacemarkClickListener = { placemarkId ->
+                // Callback is triggered, now show the bottom sheet
+                val modal = PlacemarkModal.newInstance(placemarkId)
+                modal.show(childFragmentManager, "PlacemarkViewModal")
+            }
         )
         loadInitialMapStyle({ style ->
             setupLocationDisplay(style)
             placemarkLayerManager.onStyleLoaded(style)
 
             if (initialPlacemarkLat != 999.0F && initialPlacemarkLng != 999.0F) {
-                val targetLatLng = LatLng(initialPlacemarkLat.toDouble(), initialPlacemarkLng.toDouble())
+                val targetLatLng =
+                    LatLng(initialPlacemarkLat.toDouble(), initialPlacemarkLng.toDouble())
                 val cameraPosition = CameraPosition.Builder()
                     .target(targetLatLng)
                     .zoom(15.0) // Adjust zoom level as desired
                     .build()
-                map.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition), 1000) // Animate over 1 second
+                map.animateCamera(
+                    CameraUpdateFactory.newCameraPosition(cameraPosition),
+                    1000
+                ) // Animate over 1 second
                 Log.d("MapFragment", "Centering map on: $targetLatLng")
 
                 // Optional: Highlight or show info for this placemark
                 // You might need to tell PlacemarkLayerManager to highlight this specific placemarkId
                 // placemarkLayerManager.highlightPlacemark(initialPlacemarkId)
-            }else {
+            } else {
                 Log.d("MapFragment", "Centering map on default: 56.292374, 43.985402")
                 map.cameraPosition = CameraPosition.Builder()
                     .target(LatLng(56.292374, 43.985402)) // Default position
@@ -196,9 +210,9 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
                 initialPlacemarkLng = 999.0F
                 return@let
             }
-            val lat = if(location.latitude == 0.0) 56.292374 else location.latitude
-            val lng = if(location.longitude == 0.0) 43.985402 else location.longitude
-            val currentLatLng = LatLng(lat,lng)
+            val lat = if (location.latitude == 0.0) 56.292374 else location.latitude
+            val lng = if (location.longitude == 0.0) 43.985402 else location.longitude
+            val currentLatLng = LatLng(lat, lng)
             val cameraBuilder = CameraPosition.Builder().target(currentLatLng)
                 .zoom(map.cameraPosition.zoom.coerceAtLeast(15.0))
                 .padding(0.0, 0.0, 0.0, 0.0)
@@ -206,6 +220,18 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
 
             map.animateCamera(CameraUpdateFactory.newCameraPosition(cameraBuilder.build()), 600)
         }
+        navigationViewModel.uiEvents
+            .flowWithLifecycle(viewLifecycleOwner.lifecycle, Lifecycle.State.STARTED) // Use STARTED state
+            .onEach { event ->
+                // Add a log here to see if events are being received
+                Log.d("MapFragment", "Received UI event: $event")
+                when (event) {
+                    is NavigationViewModel.UiEvent.ShowToast -> {
+                        showCustomToast(event.message, event.isError)
+                    }
+                }
+            }
+            .launchIn(viewLifecycleOwner.lifecycleScope)
 
 
         viewLifecycleOwner.lifecycleScope.launch {
@@ -246,8 +272,19 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
                 }
             }
         }
+
     }
 
+    private fun showCustomToast(message: String, isError: Boolean) {
+        val toast = Toast.makeText(requireContext(), message, Toast.LENGTH_LONG)
+        if (isError) {
+            // A simple way to make the toast "red" is to change its background color
+            // This works on most API levels but might look different across devices.
+            @Suppress("DEPRECATION")
+            toast.view?.setBackgroundColor(android.graphics.Color.RED)
+        }
+        toast.show()
+    }
     private fun updateNavigationUi(navState: NavigationState) {
         val isNavigatingOrOffRoute =
             navState == NavigationState.NAVIGATING || navState == NavigationState.OFF_ROUTE
