@@ -36,10 +36,16 @@ class NavigationViewModel(application: Application) : AndroidViewModel(applicati
         data class ShowToast(val message: String, val isError: Boolean = false) : UiEvent()
     }
 
-
-    val lastKnownGpsLocation: StateFlow<Location> = NavigationEngineService.lastLocation
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), Location(""))
-
+    val lastKnownGpsLocation: StateFlow<Location?> = NavigationEngineService.lastLocation
+        .map { location ->
+            // Filter out the initial blank location from the service
+            if (location.latitude == 0.0 && location.longitude == 0.0) null else location
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = null // Start with null
+        )
 
     // --- Observables from LocationService (Navigation Engine) ---
     val currentDisplayedPath: StateFlow<List<LatLng>> = NavigationEngineService.currentDisplayedPath

@@ -53,6 +53,14 @@ import org.maplibre.android.geometry.LatLng
 
 class NavigationEngineService : Service() {
 
+    private data class SerializableLocation(
+        val latitude: Double,
+        val longitude: Double,
+        val accuracy: Float,
+        val altitude: Double,
+        val speed: Float,
+        val time: Long
+    )
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private lateinit var locationCallback: LocationCallback
 
@@ -88,6 +96,7 @@ class NavigationEngineService : Service() {
         const val EXTRA_ROUTE_RESPONSE_JSON = "extra_route_response_json"
         private const val PREFS_NAME = "NavigationEnginePrefs"
         private const val KEY_SAVED_ROUTE_RESPONSE = "savedRouteResponse"
+        private const val KEY_LAST_LOCATION = "last_location"
 
         private const val LOCATION_UPDATE_INTERVAL = 10000L
         private const val FASTEST_LOCATION_INTERVAL = 5000L
@@ -125,8 +134,55 @@ class NavigationEngineService : Service() {
         Log.d("Location", "--- checkGMS." + checkGMS())
         Log.d("Location", "--- checkHMS." + checkHMS())
 
+        restoreLastLocation()
         restoreNavigationStateIfNecessary()
     }
+
+    private fun saveLastLocation(location: Location) {
+        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val serializableLocation = SerializableLocation(
+            latitude = location.latitude,
+            longitude = location.longitude,
+            accuracy = location.accuracy,
+            altitude = location.altitude,
+            speed = location.speed,
+            time = location.time
+        )
+        val locationJson = Gson().toJson(serializableLocation)
+        prefs.edit().putString(KEY_LAST_LOCATION, locationJson).apply()
+        Log.d("NavigationEngineService", "Saved last location: ${location.latitude}, ${location.longitude}")
+    }
+
+    private fun restoreLastLocation() {
+        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val locationJson = prefs.getString(KEY_LAST_LOCATION, null)
+        if (locationJson != null) {
+            try {
+                // Deserialize to the data class first
+                val serializableLocation = Gson().fromJson(locationJson, SerializableLocation::class.java)
+
+                // Reconstruct the Android Location object
+                val location = Location(LocationManager.GPS_PROVIDER).apply {
+                    latitude = serializableLocation.latitude
+                    longitude = serializableLocation.longitude
+                    accuracy = serializableLocation.accuracy
+                    altitude = serializableLocation.altitude
+                    speed = serializableLocation.speed
+                    time = serializableLocation.time
+                }
+
+                _lastLocation.value = location
+                Log.d("NavigationEngineService", "Restored last location: ${location.latitude}, ${location.longitude}")
+            } catch (e: Exception) {
+                Log.e("NavigationEngineService", "Failed to restore last location", e)
+            }
+
+        } else {
+            Log.d("NavigationEngineService", "No saved location found to restore.")
+        }
+    }
+
+
 
     private fun checkGMS(): Boolean {
         val gApi = GoogleApiAvailability.getInstance()
@@ -490,6 +546,7 @@ class NavigationEngineService : Service() {
         }
 
         _lastLocation.value = location
+        saveLastLocation(location)
 
 
         if ((_navigationState.value != NavigationState.NAVIGATING && _navigationState.value != NavigationState.OFF_ROUTE) || originalFullRoutePath.size < 2) {

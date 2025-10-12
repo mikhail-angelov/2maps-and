@@ -81,7 +81,7 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
     private var initialPlacemarkLat: Float = 999.0F // Use the same "no value" default
     private var initialPlacemarkLng: Float = 999.0F // Use the same "no value" default
     private var initialPlacemarkId: String = ""
-
+    private var isLocationLoaded: Boolean = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -196,11 +196,16 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
                 // placemarkLayerManager.highlightPlacemark(initialPlacemarkId)
             } else {
                 Log.d("MapFragment", "Centering map on default: 56.292374, 43.985402")
-                map.cameraPosition = CameraPosition.Builder()
-                    .target(LatLng(56.292374, 43.985402)) // Default position
-                    .zoom(13.0) // Default zoom
-                    .tilt(0.0)
-                    .build()
+                navigationViewModel.lastKnownGpsLocation.value?.let { location ->
+                     val lat = if (location.latitude == 0.0) 56.292374 else location.latitude
+                    val lng = if (location.longitude == 0.0) 43.985402 else location.longitude
+
+                    map.cameraPosition = CameraPosition.Builder()
+                        .target(LatLng(lat, lng)) // Default position
+                        .zoom(13.0) // Default zoom
+                        .tilt(0.0)
+                        .build()
+                }
             }
         })
         navigationViewModel.lastKnownGpsLocation.value?.let { location ->
@@ -238,7 +243,9 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
 
         viewLifecycleOwner.lifecycleScope.launch {
             navigationViewModel.lastKnownGpsLocation.collectLatest { location ->
-                updateCurrentLocationIndicatorAndCamera(location)
+                if (location != null) {
+                    updateCurrentLocationIndicatorAndCamera(location)
+                }
             }
         }
         viewLifecycleOwner.lifecycleScope.launch {
@@ -538,6 +545,14 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         if (!::map.isInitialized || currentLocationSource == null) return
         val point = Point.fromLngLat(location.longitude, location.latitude)
         currentLocationSource?.setGeoJson(point)
+        if(!isLocationLoaded){
+            isLocationLoaded = true
+            map.cameraPosition = CameraPosition.Builder()
+                .target(LatLng(location.latitude, location.longitude))
+                .zoom(13.0) // Default zoom
+                .tilt(0.0)
+                .build()
+        }
 
         if ((navigationViewModel.navigationState.value == NavigationState.NAVIGATING ||
                     navigationViewModel.navigationState.value == NavigationState.OFF_ROUTE) && !isUserPanning
