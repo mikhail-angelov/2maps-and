@@ -1,6 +1,7 @@
 package com.bconf.a2maps_and.placemark
 
 import android.app.AlertDialog
+import android.content.Intent
 import android.os.Bundle
 import android.util.Log
 import android.view.LayoutInflater
@@ -134,7 +135,24 @@ class PlacemarkModal : BottomSheetDialogFragment() {
             navigationViewModel.requestNavigationTo(LatLng(placemark.latitude, placemark.longitude))
             dismiss()
         }
+        binding.shareButton.setOnClickListener {
+            val lat = placemark.latitude
+            val lng = placemark.longitude
+            val placemarkName = placemark.name
 
+            // Create a geo URI for universal handling by map apps
+            val geoUri = "geo:$lat,$lng?q=$lat,$lng($placemarkName)"
+            // Create the text to share
+            val shareText = "Check out this location: $placemarkName\nCoordinates: $lat, $lng\n\nOpen in maps: $geoUri"
+
+            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_TEXT, shareText)
+                putExtra(Intent.EXTRA_SUBJECT, "Location: $placemarkName")
+            }
+            // Use a chooser to let the user pick an app
+            startActivity(Intent.createChooser(shareIntent, "Share Location"))
+        }
         // Center on map
         binding.centerButton.setOnClickListener {
             val action = PlacemarksFragmentDirections.actionPlacemarksFragmentToMapFragment(

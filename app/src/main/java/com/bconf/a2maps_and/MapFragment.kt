@@ -236,7 +236,7 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
             } else {
                 Log.d("MapFragment", "Centering map on default: 56.292374, 43.985402")
                 navigationViewModel.lastKnownGpsLocation.value?.let { location ->
-                     val lat = if (location.latitude == 0.0) 56.292374 else location.latitude
+                    val lat = if (location.latitude == 0.0) 56.292374 else location.latitude
                     val lng = if (location.longitude == 0.0) 43.985402 else location.longitude
 
                     map.cameraPosition = CameraPosition.Builder()
@@ -342,11 +342,11 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
 
     private fun updateNavigationUi(navState: NavigationState) {
         val isNavigatingOrOffRoute =
-            navState == NavigationState.NAVIGATING || navState == NavigationState.OFF_ROUTE
+            navState != NavigationState.IDLE
 
         navigationInfoPanel?.visibility = if (isNavigatingOrOffRoute) View.VISIBLE else View.GONE
         rerouteButton?.visibility =
-            if (navState == NavigationState.OFF_ROUTE) View.VISIBLE else View.GONE
+            if (navState == NavigationState.OFF_ROUTE || navState == NavigationState.ROUTE_CALCULATION_FAILED) View.VISIBLE else View.GONE
 
         val maneuverText = maneuverTextViewInFragment?.text
         if (isNavigatingOrOffRoute && !maneuverText.isNullOrBlank()) {
@@ -354,16 +354,8 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         } else {
             maneuverTextViewInFragment?.visibility = View.GONE
         }
-        fabCenterOnLocation?.visibility = if (navState == NavigationState.IDLE) {
-            View.VISIBLE
-        } else {
-            View.GONE
-        }
-        mainMenuButton?.visibility = if (navState == NavigationState.IDLE) {
-            View.VISIBLE
-        } else {
-            View.GONE
-        }
+        fabCenterOnLocation?.visibility = if (isNavigatingOrOffRoute) View.GONE else View.VISIBLE
+        mainMenuButton?.visibility = if (isNavigatingOrOffRoute) View.GONE else View.VISIBLE
     }
 
 
@@ -472,11 +464,10 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
 
     override fun onCreateContextMenu(
         menu: ContextMenu,
-        v: View, // This v is the MapView from the fragment
+        v: View,
         menuInfo: ContextMenu.ContextMenuInfo?
     ) {
         super.onCreateContextMenu(menu, v, menuInfo)
-        // Check the ID of the MapView inside the fragment's layout
         if (v.id == R.id.mapViewInFragment && longPressedLatLng != null) {
             menu.setHeaderTitle("Navigate")
             val label =
@@ -590,7 +581,7 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         if (!::map.isInitialized || currentLocationSource == null) return
         val point = Point.fromLngLat(location.longitude, location.latitude)
         currentLocationSource?.setGeoJson(point)
-        if(!isLocationLoaded){
+        if (!isLocationLoaded) {
             isLocationLoaded = true
             map.cameraPosition = CameraPosition.Builder()
                 .target(LatLng(location.latitude, location.longitude))
@@ -599,9 +590,11 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
                 .build()
         }
 
-        val isNavigating = navigationViewModel.navigationState.value == NavigationState.NAVIGATING ||
-                navigationViewModel.navigationState.value == NavigationState.OFF_ROUTE
-        val userInteractionTimeoutPassed = (System.currentTimeMillis() - lastUserInteractionTime) > USER_INTERACTION_TIMEOUT_MS
+        val isNavigating =
+            navigationViewModel.navigationState.value == NavigationState.NAVIGATING ||
+                    navigationViewModel.navigationState.value == NavigationState.OFF_ROUTE
+        val userInteractionTimeoutPassed =
+            (System.currentTimeMillis() - lastUserInteractionTime) > USER_INTERACTION_TIMEOUT_MS
         val shouldFollow = isNavigating && userInteractionTimeoutPassed
 
         if (shouldFollow) {

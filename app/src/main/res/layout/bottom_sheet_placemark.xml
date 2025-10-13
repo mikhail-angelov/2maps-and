@@ -47,14 +47,32 @@
         android:stepSize="1"
         tools:rating="4" />
 
-    <!-- Primary Action: Navigate -->
-    <com.google.android.material.button.MaterialButton
-        android:id="@+id/navigateButton"
-        style="@style/Widget.Material3.Button"
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Navigate"
-        app:icon="@drawable/ic_action_navigate" />
+        android:orientation="horizontal">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/navigateButton"
+            style="?attr/materialButtonOutlinedStyle"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Navigate"
+            app:icon="@drawable/ic_navigation" />
+
+        <!-- NEW SHARE BUTTON -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/shareButton"
+            style="?attr/materialButtonOutlinedStyle"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:layout_weight="1"
+            android:text="Share"
+            app:icon="@drawable/ic_share" />
+
+    </LinearLayout>
 
     <!-- Horizontal container for secondary actions -->
     <LinearLayout

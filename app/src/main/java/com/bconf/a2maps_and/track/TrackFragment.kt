@@ -1,16 +1,20 @@
 package com.bconf.a2maps_and.track
 
+import android.content.Intent
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
+import androidx.core.content.FileProvider
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
 import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.RecyclerView
 import com.bconf.a2maps_and.R
+import java.io.File
 
 class TrackFragment : Fragment() {
 
@@ -65,6 +69,9 @@ class TrackFragment : Fragment() {
             onTrackDelete = { trackFile ->
                 // Show a confirmation dialog before deleting
                 showDeleteConfirmationDialog(trackFile)
+            },
+            onTrackShare = { trackFile ->
+                shareTrackFile(trackFile)
             }
         )
         tracksRecyclerView.adapter = trackAdapter
@@ -79,5 +86,23 @@ class TrackFragment : Fragment() {
             }
             .setNegativeButton("Cancel", null)
             .show()
+    }
+
+    private fun shareTrackFile(trackFile: File) {
+        val context = requireContext()
+        val authority = "${context.packageName}.provider"
+        try {
+            val fileUri = FileProvider.getUriForFile(context, authority, trackFile)
+
+            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                type = "application/gpx+xml" // Specific MIME type for GPX
+                putExtra(Intent.EXTRA_STREAM, fileUri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+
+            startActivity(Intent.createChooser(shareIntent, "Share GPX Track"))
+        } catch (e: IllegalArgumentException) {
+            Toast.makeText(context, "Error: Could not share file.", Toast.LENGTH_LONG).show()
+        }
     }
 }

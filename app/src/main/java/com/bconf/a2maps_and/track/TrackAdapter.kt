@@ -15,7 +15,8 @@ import java.util.Locale
 class TrackAdapter(
     private var tracks: List<File>,
     private val onTrackClicked: (File) -> Unit,
-    private val onTrackDelete: (File) -> Unit // Add a callback for deletion
+    private val onTrackDelete: (File) -> Unit,
+    private val onTrackShare: (File) -> Unit
 ) : RecyclerView.Adapter<TrackAdapter.TrackViewHolder>() {
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): TrackViewHolder {
@@ -40,6 +41,8 @@ class TrackAdapter(
         private val nameTextView: TextView = itemView.findViewById(R.id.trackNameTextView)
         private val detailsTextView: TextView = itemView.findViewById(R.id.trackDetailsTextView)
         private val deleteButton: ImageButton = itemView.findViewById(R.id.deleteTrackButton)
+        private val shareButton: ImageButton = itemView.findViewById(R.id.shareTrackButton) // <-- Get share button
+
 
         fun bind(file: File) {
             nameTextView.text = file.name
@@ -51,7 +54,9 @@ class TrackAdapter(
             itemView.setOnClickListener {
                 onTrackClicked(file)
             }
-
+            shareButton.setOnClickListener {
+                onTrackShare(file)
+            }
             // Handle delete button click
             deleteButton.setOnClickListener {
                 onTrackDelete(file)

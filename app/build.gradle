@@ -1,21 +1,36 @@
 plugins {
-    alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
-    id("androidx.navigation.safeargs.kotlin")
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+    id 'androidx.navigation.safeargs.kotlin'
+}
+
+def localProperties = new Properties()
+def localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localProperties.load(new FileInputStream(localPropertiesFile))
 }
 
 android {
     namespace 'com.bconf.a2maps_and'
-    compileSdk 36
+    compileSdk 34
 
     defaultConfig {
         applicationId "com.bconf.a2maps_and"
         minSdk 29
-        targetSdk 36
+        targetSdk 34
         versionCode 1
         versionName "1.0"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+
+        // Make the property from local.properties available in your code
+        // Note the escaped quotes for the string value
+        buildConfigField("String", "VALHALLA_BASE_URL", "\"${localProperties.getProperty('valhalla.baseUrl', '')}\"")
+    }
+
+    buildFeatures {
+        viewBinding true
+        buildConfig true // Explicitly enable buildConfig
     }
 
     buildTypes {
@@ -31,44 +46,44 @@ android {
     kotlinOptions {
         jvmTarget = '11'
     }
-    buildFeatures {
-        viewBinding true
-    }
 }
 
 dependencies {
-
+    // Removed dependency versions that are managed by libs (libs.plugins)
     implementation libs.androidx.core.ktx
     implementation libs.androidx.appcompat
-    implementation libs.material
+    implementation libs.material // This handles com.google.android.material
     implementation libs.androidx.activity
     implementation libs.androidx.constraintlayout
-    implementation libs.androidx.material3
-    implementation libs.play.services.maps
-    implementation libs.androidx.graphics.shapes
-    testImplementation libs.junit
-    androidTestImplementation libs.androidx.junit
-    androidTestImplementation libs.androidx.espresso.core
+    // implementation libs.androidx.material3 // This was in your dependencies but not used in layout, keep if needed
+    // implementation libs.play.services.maps // This seems unused if you use MapLibre
+    // implementation libs.androidx.graphics.shapes // This seems unused, keep if needed
+    implementation libs.androidx.navigation.fragment.ktx
+    implementation libs.androidx.navigation.ui.ktx
+
+    // Map and Location
     implementation 'org.maplibre.gl:android-sdk:11.8.0'
     implementation 'com.google.android.gms:play-services-location:21.2.0'
-    implementation 'com.google.android.material:material:1.10.0'
+    implementation 'com.huawei.hms:location:6.12.0.300'
+
     // Retrofit for networking
     implementation 'com.squareup.retrofit2:retrofit:2.9.0'
-    implementation 'com.squareup.retrofit2:converter-gson:2.9.0' // Or converter-moshi
-    implementation 'com.squareup.okhttp3:logging-interceptor:4.9.3' // For logging network requests (optional)
+    implementation 'com.squareup.retrofit2:converter-gson:2.9.0'
+    implementation 'com.squareup.okhttp3:logging-interceptor:4.9.3'
 
-    // For decoding Google's Encoded Polyline
-    implementation 'com.google.maps.android:android-maps-utils:2.3.0' // Provides PolyUtil
-
-    // Kotlin Coroutines for background tasks
-    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3'
+    // Map Utilities
+    implementation 'com.google.maps.android:android-maps-utils:2.3.0' // For PolyUtil
     implementation 'com.mapbox.mapboxsdk:mapbox-sdk-geojson:7.7.0'
     implementation 'com.mapbox.mapboxsdk:mapbox-sdk-turf:7.7.0'
 
-    implementation 'androidx.annotation:annotation:1.0.0'
-    implementation 'com.huawei.hms:location:6.12.0.300' // Example version, check for latest
+    // Coroutines
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3'
 
-    // Jetpack Navigation
-    implementation libs.androidx.navigation.fragment.ktx
-    implementation libs.androidx.navigation.ui.ktx
+    // Annotation
+    implementation 'androidx.annotation:annotation:1.7.1' // Updated version
+
+    // Testing
+    testImplementation libs.junit
+    androidTestImplementation libs.androidx.junit
+    androidTestImplementation libs.androidx.espresso.core
 }
