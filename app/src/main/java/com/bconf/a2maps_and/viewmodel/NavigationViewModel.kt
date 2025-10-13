@@ -14,6 +14,7 @@ import com.bconf.a2maps_and.repository.RouteRepository
 import com.bconf.a2maps_and.routing.ValhallaLocation
 import com.bconf.a2maps_and.routing.ValhallaRouteResponse
 import com.bconf.a2maps_and.service.NavigationEngineService
+import com.bconf.a2maps_and.utils.PlacemarkUtils
 import com.google.gson.Gson
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -61,7 +62,7 @@ class NavigationViewModel(application: Application) : AndroidViewModel(applicati
 
     val remainingDistance: StateFlow<String> =
         NavigationEngineService.remainingDistanceInMeters.map { distance ->
-            formatDistanceForDisplay(distance)
+            PlacemarkUtils.formatDistanceForDisplay(distance)
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "0.0 m")
 
     // --- UI State derived from navigationState and currentManeuver ---
@@ -71,7 +72,7 @@ class NavigationViewModel(application: Application) : AndroidViewModel(applicati
         ) {
 
             val distanceStr = if (details.remainingDistanceToManeuverMeters != null) {
-                formatDistanceForDisplay(details.remainingDistanceToManeuverMeters) // Use a local formatter
+                PlacemarkUtils.formatDistanceForDisplay(details.remainingDistanceToManeuverMeters) // Use a local formatter
             } else {
                 // If distance is null, maybe use the maneuver segment length as a fallback or indicate unknown
                 // For now, let's just use "..." or try to format maneuver.length
@@ -92,28 +93,7 @@ class NavigationViewModel(application: Application) : AndroidViewModel(applicati
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
 
     // Helper function for formatting distance in ViewModel (can be shared or localized)
-    private fun formatDistanceForDisplay(distanceMeters: Double): String {
-        return if (distanceMeters < 1.0 && distanceMeters > 0) { // for < 1m show cm or "now"
-            "Now" // Or String.format("%.0f cm", distanceMeters * 100) but "Now" is common
-        } else if (distanceMeters < 10.0) { // Distances like 9.5m
-            String.format(
-                "%.0f m",
-                distanceMeters
-            ) // Show without decimal for values like 7m, 8m, 9m
-        } else if (distanceMeters < 50.0 && distanceMeters >= 10.0) { // For 10m to 49m, round to nearest 5 or 10
-            String.format("%.0f m", (Math.round(distanceMeters / 5.0) * 5.0))
-        } else if (distanceMeters < 1000.0) { // From 50m up to 999m
-            // Round to nearest 10m for cleaner display (e.g., 50m, 60m, not 53m)
-            String.format("%.0f m", (Math.round(distanceMeters / 10.0) * 10.0))
-        } else { // Kilometers
-            val km = distanceMeters / 1000.0
-            if (km < 10.0) { // e.g. 1.2 km, 9.8 km
-                String.format("%.1f km", km)
-            } else { // e.g. 10 km, 125 km
-                String.format("%.0f km", km)
-            }
-        }
-    }
+
 
     fun requestNavigationTo(destinationLatLng: LatLng) {
         viewModelScope.launch {

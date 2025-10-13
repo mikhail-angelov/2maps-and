@@ -1,21 +1,19 @@
 package com.bconf.a2maps_and.placemark
 
 import android.app.Application
-import android.content.Context
 import android.content.Intent
 import android.location.Location
 import android.net.Uri
 import android.util.Log
-import androidx.compose.ui.input.key.type
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.bconf.a2maps_and.utils.PlacemarkUtils
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.withContext

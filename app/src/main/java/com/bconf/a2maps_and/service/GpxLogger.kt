@@ -13,6 +13,9 @@ import java.util.Locale
 class GpxLogger(private val context: Context) {
 
     private var gpxFileWriter: FileWriter? = null
+    // Define the directory in a centralized way, matching TrackViewModel
+    private val gpxDir = File(context.filesDir, "gpx")
+
 
     fun startGpxLogging() {
         if (gpxFileWriter != null) {
@@ -20,9 +23,21 @@ class GpxLogger(private val context: Context) {
             stopGpxLogging()
         }
 
+        // Ensure the 'gpx' directory exists.
+        if (!gpxDir.exists()) {
+            if (gpxDir.mkdirs()) {
+                Log.i("GpxLogger", "Created gpx directory at: ${gpxDir.absolutePath}")
+            } else {
+                Log.e("GpxLogger", "Failed to create gpx directory.")
+                return // Stop if directory creation fails
+            }
+        }
+
+
         val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
         val fileName = "track_$timeStamp.gpx"
-        val gpxFile = File(context.getExternalFilesDir(null), fileName)
+        // Create the file inside the internal 'gpx' directory
+        val gpxFile = File(gpxDir, fileName)
 
         try {
             gpxFileWriter = FileWriter(gpxFile)
@@ -50,7 +65,7 @@ class GpxLogger(private val context: Context) {
                 writer.append("      <ele>${location.altitude}</ele>\n")
                 writer.append("      <time>$time</time>\n")
                 if (location.hasAccuracy()) {
-                    writer.appendLine("      <hdop>${location.accuracy}</hdop>")
+                    writer.append("      <hdop>${location.accuracy}</hdop>\n")
                 }
                 if (location.hasBearing()) {
                     writer.append("      <course>${location.bearing}</course>\n")

@@ -1,7 +1,8 @@
-package com.bconf.a2maps_and.placemark
+package com.bconf.a2maps_and.utils
 
 import android.location.Location
 import android.util.Log
+import com.bconf.a2maps_and.placemark.Placemark
 
 /**
  * A data class to hold the result of a distance calculation.
@@ -47,6 +48,29 @@ object PlacemarkUtils {
         } catch (e: IllegalArgumentException) {
             Log.e("PlacemarkUtils", "Error calculating distance for ${placemark.name}", e)
             DistanceResult(null, "Error")
+        }
+    }
+
+    fun formatDistanceForDisplay(distanceMeters: Double): String {
+        return if (distanceMeters < 1.0 && distanceMeters > 0) { // for < 1m show cm or "now"
+            "Now" // Or String.format("%.0f cm", distanceMeters * 100) but "Now" is common
+        } else if (distanceMeters < 10.0) { // Distances like 9.5m
+            String.format(
+                "%.0f m",
+                distanceMeters
+            ) // Show without decimal for values like 7m, 8m, 9m
+        } else if (distanceMeters < 50.0 && distanceMeters >= 10.0) { // For 10m to 49m, round to nearest 5 or 10
+            String.format("%.0f m", (Math.round(distanceMeters / 5.0) * 5.0))
+        } else if (distanceMeters < 1000.0) { // From 50m up to 999m
+            // Round to nearest 10m for cleaner display (e.g., 50m, 60m, not 53m)
+            String.format("%.0f m", (Math.round(distanceMeters / 10.0) * 10.0))
+        } else { // Kilometers
+            val km = distanceMeters / 1000.0
+            if (km < 10.0) { // e.g. 1.2 km, 9.8 km
+                String.format("%.1f km", km)
+            } else { // e.g. 10 km, 125 km
+                String.format("%.0f km", km)
+            }
         }
     }
 

@@ -24,6 +24,8 @@ import com.bconf.a2maps_and.navigation.NavigationState
 import com.bconf.a2maps_and.placemark.PlacemarkLayerManager
 import com.bconf.a2maps_and.placemark.PlacemarkModal
 import com.bconf.a2maps_and.placemark.PlacemarksViewModel
+import com.bconf.a2maps_and.track.TrackLayerManager
+import com.bconf.a2maps_and.track.TrackViewModel
 import com.bconf.a2maps_and.ui.viewmodel.NavigationViewModel
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import kotlinx.coroutines.flow.collectLatest
@@ -36,6 +38,7 @@ import org.maplibre.android.MapLibre
 import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
+import org.maplibre.android.gestures.MoveGestureDetector
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.OnMapReadyCallback
@@ -57,13 +60,16 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
     private lateinit var map: MapLibreMap // Made public to be accessible from MainActivity if needed initially
 
     private lateinit var placemarkLayerManager: PlacemarkLayerManager
+    private lateinit var trackLayerManager: TrackLayerManager
     private val navigationViewModel: NavigationViewModel by activityViewModels()
     private val placemarkViewModel: PlacemarksViewModel by activityViewModels()
+    private val trackViewModel: TrackViewModel by activityViewModels()
 
     private var longPressedLatLng: LatLng? = null
     private val ID_MENU_NAVIGATE = 1
     private val ID_MENU_ADD_PLACEMARK = 2
     private var fabCenterOnLocation: FloatingActionButton? = null // Reference for the new FAB
+    private var fabHideTrack: FloatingActionButton? = null
     private var isUserPanning = false
     private var currentLocationSource: GeoJsonSource? = null
     private val CURRENT_LOCATION_SOURCE_ID = "current-location-source"
@@ -82,6 +88,8 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
     private var initialPlacemarkLng: Float = 999.0F // Use the same "no value" default
     private var initialPlacemarkId: String = ""
     private var isLocationLoaded: Boolean = false
+    private var lastUserInteractionTime: Long = 0
+    private val USER_INTERACTION_TIMEOUT_MS = 60 * 1000 // 1 minute
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -112,6 +120,7 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         stopNavigationButton = view.findViewById(R.id.stopNavigationButton)
         rerouteButton = view.findViewById(R.id.rerouteButton)
         fabCenterOnLocation = view.findViewById(R.id.fabCenterOnLocationInFragment)
+        fabHideTrack = view.findViewById(R.id.fabHideTrack)
         mainMenuButton = view.findViewById(R.id.mainMenuButton) // Initialize mainMenuButton
 
         mainMenuButton?.setOnClickListener { // Set click listener
@@ -141,6 +150,10 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
                 ).show()
             }
         }
+        fabHideTrack?.setOnClickListener {
+            trackViewModel.clearTrack()
+        }
+
         Log.d(
             "MapFragment",
             "maneuverTextViewInFragment is null: ${maneuverTextViewInFragment == null}"
@@ -162,21 +175,47 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         }
         map.addOnMapLongClickListener(this)
         map.addOnMapClickListener(this)
+        // Add a listener to detect user gestures on the map
+        map.addOnMoveListener(object : MapLibreMap.OnMoveListener {
+            override fun onMoveBegin(detector: MoveGestureDetector) {
+                // User started moving the map
+                if (detector.pointersCount > 0) { // Check if it's a real user gesture
+                    lastUserInteractionTime = System.currentTimeMillis()
+                    Log.d("MapFragment", "User started panning/zooming.")
+                }
+            }
+
+            override fun onMove(detector: MoveGestureDetector) {
+                // Continuously update the time while the user is moving the map
+                if (detector.pointersCount > 0) {
+                    lastUserInteractionTime = System.currentTimeMillis()
+                }
+            }
+
+            override fun onMoveEnd(detector: MoveGestureDetector) {
+                // User finished moving the map
+                Log.d("MapFragment", "User finished panning/zooming.")
+            }
+        })
         mapView.let { registerForContextMenu(it) }
 
-        placemarkLayerManager = PlacemarkLayerManager(
-            requireContext(), map,
-            placemarkViewModel,
-            viewLifecycleOwner.lifecycle,
-            onPlacemarkClickListener = { placemarkId ->
-                // Callback is triggered, now show the bottom sheet
-                val modal = PlacemarkModal.newInstance(placemarkId)
-                modal.show(childFragmentManager, "PlacemarkViewModal")
-            }
-        )
         loadInitialMapStyle({ style ->
             setupLocationDisplay(style)
+            placemarkLayerManager = PlacemarkLayerManager(
+                requireContext(), map,
+                placemarkViewModel,
+                viewLifecycleOwner.lifecycle,
+                onPlacemarkClickListener = { placemarkId ->
+                    // Callback is triggered, now show the bottom sheet
+                    val modal = PlacemarkModal.newInstance(placemarkId)
+                    modal.show(childFragmentManager, "PlacemarkViewModal")
+                }
+            )
             placemarkLayerManager.onStyleLoaded(style)
+            trackLayerManager = TrackLayerManager(
+                requireContext(), map, trackViewModel,
+                viewLifecycleOwner.lifecycle,
+            )
 
             if (initialPlacemarkLat != 999.0F && initialPlacemarkLng != 999.0F) {
                 val targetLatLng =
@@ -281,7 +320,13 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
                 }
             }
         }
-
+        viewLifecycleOwner.lifecycleScope.launch {
+            trackViewModel.trackPoints.collectLatest { points ->
+                // Show the button if the list is not empty, hide it otherwise
+                Log.d("MapFragment", "Track points: $points: ${points.isNotEmpty()}")
+                fabHideTrack?.visibility = if (points.isNotEmpty()) View.VISIBLE else View.GONE
+            }
+        }
     }
 
     private fun showCustomToast(message: String, isError: Boolean) {
@@ -554,9 +599,12 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
                 .build()
         }
 
-        if ((navigationViewModel.navigationState.value == NavigationState.NAVIGATING ||
-                    navigationViewModel.navigationState.value == NavigationState.OFF_ROUTE) && !isUserPanning
-        ) {
+        val isNavigating = navigationViewModel.navigationState.value == NavigationState.NAVIGATING ||
+                navigationViewModel.navigationState.value == NavigationState.OFF_ROUTE
+        val userInteractionTimeoutPassed = (System.currentTimeMillis() - lastUserInteractionTime) > USER_INTERACTION_TIMEOUT_MS
+        val shouldFollow = isNavigating && userInteractionTimeoutPassed
+
+        if (shouldFollow) {
 
             // Calculate padding to shift the location 100px from the bottom
             val bottomPaddingPx = 2000f

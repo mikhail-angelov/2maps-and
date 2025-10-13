@@ -20,10 +20,11 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="16dp"
         android:layout_marginEnd="16dp"
+        android:contentDescription="Main Menu"
         android:src="@drawable/ic_menu_vector"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        android:contentDescription="Main Menu" />
+        app:layout_constraintTop_toTopOf="parent" />
+
 
     <TextView
         android:id="@+id/mapFragmentManeuverTextView"
@@ -41,7 +42,35 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
         tools:text="100m: Turn left onto Main Street"
-        tools:visibility="visible"/>
+        tools:visibility="visible" />
+
+    <!-- Group: Bottom-aligned UI elements -->
+
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fabCenterOnLocationInFragment"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_margin="16dp"
+        android:contentDescription="Center on current location"
+        android:src="@drawable/ic_navigation"
+        android:visibility="gone"
+        app:layout_constraintBottom_toTopOf="@id/navigationInfoPanel"
+        app:layout_constraintEnd_toEndOf="parent"
+        tools:visibility="visible" />
+
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fabHideTrack"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginEnd="8dp"
+        android:contentDescription="Hide current track"
+        android:src="@drawable/ic_timeline_off"
+        android:visibility="gone"
+        app:layout_constraintBottom_toBottomOf="@+id/fabCenterOnLocationInFragment"
+        app:layout_constraintEnd_toStartOf="@+id/fabCenterOnLocationInFragment"
+        app:layout_constraintTop_toTopOf="@+id/fabCenterOnLocationInFragment"
+        tools:ignore="HardcodedText"
+        tools:visibility="visible" />
 
     <androidx.constraintlayout.widget.ConstraintLayout
         android:id="@+id/navigationInfoPanel"
@@ -96,16 +125,5 @@
             app:tint="@android:color/white" />
 
     </androidx.constraintlayout.widget.ConstraintLayout>
-
-    <com.google.android.material.floatingactionbutton.FloatingActionButton
-        android:id="@+id/fabCenterOnLocationInFragment"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_margin="16dp"
-        android:src="@drawable/ic_navigation"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        android:visibility="gone"
-        tools:visibility="visible" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

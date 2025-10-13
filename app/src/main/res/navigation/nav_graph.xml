@@ -37,6 +37,11 @@
             app:destination="@id/placemarksFragment"
             app:popUpTo="@id/mainMenuFragment"
             app:popUpToInclusive="true" />
+        <action
+            android:id="@+id/action_mainMenuFragment_to_tracksFragment"
+            app:destination="@id/trackFragment"
+            app:popUpTo="@id/mainMenuFragment"
+            app:popUpToInclusive="true" />
     </fragment>
 
     <fragment
@@ -47,4 +52,9 @@
         <action
             android:id="@+id/action_placemarksFragment_to_mapFragment"
             app:destination="@id/mapFragment" />
+    <fragment
+        android:id="@+id/trackFragment"
+        android:name="com.bconf.a2maps_and.track.TrackFragment"
+        android:label="Tracks"
+        tools:layout="@layout/fragment_track" />
 </navigation>
