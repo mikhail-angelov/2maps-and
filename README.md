@@ -4,41 +4,90 @@ This is an advanced mapping and navigation application for Android, built with a
 
 ## Key Features
 
-- **Interactive Map:**
+<table>
+<tr>
+<td width="180" valign="top">
+<img width="160" height="340" alt="2025-10-13_18-33-52" src="https://github.com/user-attachments/assets/1ca55ad5-a222-4894-b662-f443ab84eb57" />
+</td>
+<td valign="top">
+
+**Interactive Map:**
   - Built using **MapLibre GL Native**, providing high-performance, hardware-accelerated map rendering.
+  - Offline OSM map is supported (preloaded Nizhegorodsky region only).
   - Supports custom map styles loaded from assets, allowing for complete visual control (e.g., street, satellite, terrain views).
   - Smooth pan, zoom, and tilt gestures for intuitive map exploration.
 
-- **Turn-by-Turn Navigation:**
+</td>
+</tr>
+</table>
+<table>
+<tr>
+<td width="180" valign="top">
+<img width="160" height="340" alt="2025-10-13_18-35-02" src="https://github.com/user-attachments/assets/28872196-de4a-494d-b0b3-800dfc49680e" />
+</td>
+<td valign="top">
+  
+**Turn-by-Turn Navigation:**
   - **Custom Routing Engine:** Implements its own navigation logic, likely using an external routing service like Valhalla via Retrofit.
   - **Real-time Guidance:** Displays maneuver instructions, remaining distance, and updates the route dynamically.
   - **Off-Route Detection & Rerouting:** Automatically detects when the user has deviated from the path and provides an option to recalculate the route.
   - **Route Visualization:** Draws the calculated navigation path clearly on the map.
 
-- **Placemark Management:**
+</td>
+</tr>
+</table>
+<table>
+<tr>
+<td width="180" valign="top">
+<img width="160" height="340" alt="2025-10-13_18-34-37" src="https://github.com/user-attachments/assets/35fbe22d-e528-49e5-889f-a2064c9d8512" />
+</td>
+<td valign="top">
+  
+**Placemark Management:**
   - **Create & Save Placemarks:** Long-press anywhere on the map to save a point of interest.
   - **View Placemark Details:** Click on a placemark icon to open a modal with its details.
   - **List & Sort Placemarks:** View a comprehensive list of all saved placemarks, sorted by distance from your current location.
   - **Item Actions:** Swipe a placemark in the list to reveal actions:
     - **Center:** Center the map on the placemark's location.
     - **Navigate:** Start a navigation route to the placemark.
+    - **Share:** Share placemark coordinates.
     - **Edit:** (Functionality to be implemented).
     - **Delete:** Remove the placemark.
-
-- **GPS Tracking:**
+      
+  </td>
+</tr>
+</table>
+<table>
+<tr>
+<td width="180" valign="top">
+<img width="160" height="340" alt="2025-10-13_18-35-30" src="https://github.com/user-attachments/assets/03eb169d-a4e1-4c03-b522-1c657de5760a" />
+</td>
+<td valign="top">
+  
+**GPS Tracking:**
   - **Record Your Path:** Records the user's GPS location history to create a track.
   - **Track Visualization:** Displays the recorded track as a line on the map.
   - **Clear Track:** Provides an option to clear the currently recorded track from the map.
 
-- **Location Services Integration:**
+**Location Services Integration:**
   - **Fused Location Provider:** Utilizes Google's Fused Location Provider (`play-services-location`) and is structured to potentially support others (like Huawei HMS) for accurate and efficient location updates.
   - **Current Location Indicator:** Shows the user's current location on the map.
   - **"Center on Me" Functionality:** A floating action button allows the user to re-center the map on their current GPS location.
+    
+  </td>
+</tr>
+</table>
 
-- **Modern Android Architecture:**
+
+### Modern Android Architecture:
   - **MVVM Architecture:** Separates UI logic from business logic using ViewModels (`PlacemarksViewModel`, `NavigationViewModel`, `TrackViewModel`).
   - **Kotlin & Coroutines:** Written entirely in Kotlin, using coroutines and `StateFlow` for managing asynchronous operations and state.
   - **Android Jetpack:**
     - **Navigation Component:** Manages in-app navigation between the map, placemark list, and other screens.
     - **Lifecycle-Aware Components:** Uses `lifecycleScope` and `flowWithLifecycle` to safely observe data streams, preventing memory leaks.
   - **ViewBinding:** Used for safe and efficient access to views.
+---
+
+## 📜 License
+
+This project is licensed under the MIT License.
