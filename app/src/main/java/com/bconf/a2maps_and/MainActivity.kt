@@ -4,14 +4,14 @@ import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
-import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.util.Log
 import android.view.View
 import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.appcompat.widget.Toolbar // Import Toolbar
+import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.widget.Toolbar
 import androidx.core.app.ActivityCompat
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
@@ -19,10 +19,10 @@ import androidx.navigation.NavController
 import androidx.navigation.fragment.NavHostFragment
 import androidx.navigation.ui.AppBarConfiguration
 import androidx.navigation.ui.NavigationUI
-import com.bconf.a2maps_and.navigation.NavigationState
-import com.bconf.a2maps_and.placemark.PlacemarkService
 import com.bconf.a2maps_and.navigation.NavigationEngineService
+import com.bconf.a2maps_and.navigation.NavigationState
 import com.bconf.a2maps_and.navigation.NavigationViewModel
+import com.bconf.a2maps_and.placemark.PlacemarkService
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
@@ -69,7 +69,10 @@ class MainActivity : AppCompatActivity() {
 
     override fun onSupportNavigateUp(): Boolean {
         // Handle the Up button press, navigateUp will use appBarConfiguration
-        return NavigationUI.navigateUp(navController, appBarConfiguration) || super.onSupportNavigateUp()
+        return NavigationUI.navigateUp(
+            navController,
+            appBarConfiguration
+        ) || super.onSupportNavigateUp()
     }
 
     private fun observeViewModel() {
@@ -78,16 +81,18 @@ class MainActivity : AppCompatActivity() {
             navigationViewModel.navigationState.collectLatest { state ->
                 Log.d("MainActivity", "VM Navigation State Changed: $state")
                 // ... (handle UI changes based on state: Toasts, button visibility etc.)
-                if (state == NavigationState.ARRIVED) {
-                    Toast.makeText(this@MainActivity, "You have arrived!", Toast.LENGTH_LONG).show()
-                    // ViewModel will call stopNavigation on the service
-                } else if (state == NavigationState.ROUTE_CALCULATION) {
+                if (state == NavigationState.ROUTE_CALCULATION) {
                     Toast.makeText(this@MainActivity, "Requesting route...", Toast.LENGTH_LONG)
                         .show()
-                }else if (state == NavigationState.OFF_ROUTE) {
-                    Toast.makeText(this@MainActivity, "You are off route!", Toast.LENGTH_LONG).show()
+                } else if (state == NavigationState.OFF_ROUTE) {
+                    Toast.makeText(this@MainActivity, "You are off route!", Toast.LENGTH_LONG)
+                        .show()
                 } else if (state == NavigationState.ROUTE_CALCULATION_FAILED) {
-                    Toast.makeText(this@MainActivity, "Route calculation failed.", Toast.LENGTH_LONG).show()
+                    Toast.makeText(
+                        this@MainActivity,
+                        "Route calculation failed.",
+                        Toast.LENGTH_LONG
+                    ).show()
                 }
             }
         }
@@ -96,23 +101,37 @@ class MainActivity : AppCompatActivity() {
 
     private val requestLocationPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
-            val fineLocationGranted = permissions.getOrDefault(Manifest.permission.ACCESS_FINE_LOCATION, false)
-            val coarseLocationGranted = permissions.getOrDefault(Manifest.permission.ACCESS_COARSE_LOCATION, false)
+            val fineLocationGranted =
+                permissions.getOrDefault(Manifest.permission.ACCESS_FINE_LOCATION, false)
+            val coarseLocationGranted =
+                permissions.getOrDefault(Manifest.permission.ACCESS_COARSE_LOCATION, false)
 
             if (fineLocationGranted || coarseLocationGranted) {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    if (permissions.getOrDefault(Manifest.permission.ACCESS_BACKGROUND_LOCATION, false)) {
+                    if (permissions.getOrDefault(
+                            Manifest.permission.ACCESS_BACKGROUND_LOCATION,
+                            false
+                        )
+                    ) {
                         startLocationService()
                     } else {
                         Log.w("Location", "Background location permission denied.")
-                        Toast.makeText(this, "Background location permission is needed for full functionality.", Toast.LENGTH_LONG).show()
+                        Toast.makeText(
+                            this,
+                            "Background location permission is needed for full functionality.",
+                            Toast.LENGTH_LONG
+                        ).show()
                     }
                 } else {
                     startLocationService()
                 }
             } else {
                 Log.w("Location", "Location permission denied.")
-                Toast.makeText(this, "Location permissions are required for map functionality.", Toast.LENGTH_LONG).show()
+                Toast.makeText(
+                    this,
+                    "Location permissions are required for map functionality.",
+                    Toast.LENGTH_LONG
+                ).show()
             }
         }
 
@@ -125,8 +144,14 @@ class MainActivity : AppCompatActivity() {
             permissionsToRequest.add(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
         }
 
-        val foregroundPermissionsGranted = ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
-                ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        val foregroundPermissionsGranted = ActivityCompat.checkSelfPermission(
+            this,
+            Manifest.permission.ACCESS_FINE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED ||
+                ActivityCompat.checkSelfPermission(
+                    this,
+                    Manifest.permission.ACCESS_COARSE_LOCATION
+                ) == PackageManager.PERMISSION_GRANTED
 
         if (foregroundPermissionsGranted) {
 //            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -136,7 +161,7 @@ class MainActivity : AppCompatActivity() {
 //                    requestLocationPermissionLauncher.launch(permissionsToRequest.toTypedArray())
 //                }
 //            } else {
-                startLocationService()
+            startLocationService()
 //            }
         } else {
             requestLocationPermissionLauncher.launch(permissionsToRequest.toTypedArray())
@@ -149,7 +174,7 @@ class MainActivity : AppCompatActivity() {
 //             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
 //                startForegroundService(it)
 //            } else {
-                startService(it)
+            startService(it)
 //            }
         }
         Intent(this, PlacemarkService::class.java).also {
@@ -165,7 +190,7 @@ class MainActivity : AppCompatActivity() {
     private fun stopLocationService() {
         Intent(this, NavigationEngineService::class.java).also {
             it.action = NavigationEngineService.ACTION_STOP_LOCATION_SERVICE
-            startService(it) 
+            startService(it)
         }
     }
 
@@ -173,14 +198,14 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-         checkLocationPermissionsAndStartUpdates()
+        checkLocationPermissionsAndStartUpdates()
     }
 
     override fun onPause() {
         super.onPause()
         window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
     }
-    
+
     override fun onDestroy() {
         super.onDestroy()
         stopLocationService()
