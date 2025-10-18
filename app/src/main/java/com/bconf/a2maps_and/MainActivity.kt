@@ -3,7 +3,6 @@ package com.bconf.a2maps_and
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.view.View
@@ -107,23 +106,19 @@ class MainActivity : AppCompatActivity() {
                 permissions.getOrDefault(Manifest.permission.ACCESS_COARSE_LOCATION, false)
 
             if (fineLocationGranted || coarseLocationGranted) {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    if (permissions.getOrDefault(
-                            Manifest.permission.ACCESS_BACKGROUND_LOCATION,
-                            false
-                        )
-                    ) {
-                        startLocationService()
-                    } else {
-                        Log.w("Location", "Background location permission denied.")
-                        Toast.makeText(
-                            this,
-                            "Background location permission is needed for full functionality.",
-                            Toast.LENGTH_LONG
-                        ).show()
-                    }
-                } else {
+                if (permissions.getOrDefault(
+                        Manifest.permission.ACCESS_BACKGROUND_LOCATION,
+                        false
+                    )
+                ) {
                     startLocationService()
+                } else {
+                    Log.w("Location", "Background location permission denied.")
+                    Toast.makeText(
+                        this,
+                        "Background location permission is needed for full functionality.",
+                        Toast.LENGTH_LONG
+                    ).show()
                 }
             } else {
                 Log.w("Location", "Location permission denied.")
@@ -139,10 +134,7 @@ class MainActivity : AppCompatActivity() {
         val permissionsToRequest = mutableListOf<String>()
         permissionsToRequest.add(Manifest.permission.ACCESS_FINE_LOCATION)
         permissionsToRequest.add(Manifest.permission.ACCESS_COARSE_LOCATION)
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            permissionsToRequest.add(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
-        }
+        permissionsToRequest.add(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
 
         val foregroundPermissionsGranted = ActivityCompat.checkSelfPermission(
             this,

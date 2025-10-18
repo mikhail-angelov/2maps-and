@@ -12,7 +12,7 @@ if (localPropertiesFile.exists()) {
 
 android {
     namespace 'com.bconf.a2maps_and'
-    compileSdk 34
+    compileSdk 36
 
     defaultConfig {
         applicationId "com.bconf.a2maps_and"
@@ -55,9 +55,6 @@ dependencies {
     implementation libs.material // This handles com.google.android.material
     implementation libs.androidx.activity
     implementation libs.androidx.constraintlayout
-    // implementation libs.androidx.material3 // This was in your dependencies but not used in layout, keep if needed
-    // implementation libs.play.services.maps // This seems unused if you use MapLibre
-    // implementation libs.androidx.graphics.shapes // This seems unused, keep if needed
     implementation libs.androidx.navigation.fragment.ktx
     implementation libs.androidx.navigation.ui.ktx
 
