@@ -16,16 +16,13 @@ import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.view.MenuHost
 import androidx.core.view.MenuProvider
-import androidx.core.view.isVisible
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
-import androidx.recyclerview.widget.LinearLayoutManager
 import com.bconf.a2maps_and.R
 import com.bconf.a2maps_and.databinding.FragmentPlacemarksBinding
-import com.bconf.a2maps_and.navigation.NavigationViewModel
-import kotlinx.coroutines.flow.collectLatest
+import com.google.android.material.tabs.TabLayoutMediator
 import kotlinx.coroutines.launch
 
 class PlacemarksFragment : Fragment() {
@@ -34,9 +31,8 @@ class PlacemarksFragment : Fragment() {
     private val binding get() = _binding!!
 
     private val placemarkViewModel: PlacemarksViewModel by activityViewModels()
-    private val navigationViewModel: NavigationViewModel by activityViewModels()
-    private lateinit var placemarkAdapter: PlacemarkAdapter
     private lateinit var filePickerLauncher: ActivityResultLauncher<Intent>
+    private var importType: String? = null
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -48,7 +44,6 @@ class PlacemarksFragment : Fragment() {
         ) { result ->
             if (result.resultCode == Activity.RESULT_OK) {
                 result.data?.data?.let { uri ->
-                    // Handle the selected file URI
                     Log.d("PlacemarksFragment", "Selected file URI: $uri")
                     handleSelectedJsonFile(uri)
                 }
@@ -61,11 +56,20 @@ class PlacemarksFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        setupRecyclerView()
-        observeViewModel()
-        // Setup the Menu
-        val menuHost: MenuHost =
-            requireActivity() // Or requireView() if you want it scoped to the fragment's view lifecycle
+
+        val adapter = PlacemarksPagerAdapter(this)
+        binding.viewPager.adapter = adapter
+
+        TabLayoutMediator(binding.tabLayout, binding.viewPager) { tab, position ->
+            tab.text = when (position) {
+                0 -> "Placemarks"
+                1 -> "Gas"
+                else -> null
+            }
+        }.attach()
+
+
+        val menuHost: MenuHost = requireActivity()
         menuHost.addMenuProvider(object : MenuProvider {
             override fun onCreateMenu(menu: Menu, menuInflater: MenuInflater) {
                 menuInflater.inflate(R.menu.placemarks_fragment_menu, menu)
@@ -73,55 +77,26 @@ class PlacemarksFragment : Fragment() {
 
             override fun onMenuItemSelected(menuItem: MenuItem): Boolean {
                 return when (menuItem.itemId) {
-                    R.id.action_import_json -> {
+                    R.id.action_import_placemarks -> {
+                        importType = "placemarks"
                         openFilePicker()
-                        true // Indicate the item selection was handled
+                        true
                     }
-
-                    else -> false // Let other components handle the item
+                    R.id.action_import_gas_stations -> {
+                        importType = "gas_stations"
+                        openFilePicker()
+                        true
+                    }
+                    else -> false
                 }
             }
-        }, viewLifecycleOwner, Lifecycle.State.RESUMED) // Observe while fragment is resumed
-
+        }, viewLifecycleOwner, Lifecycle.State.RESUMED)
     }
-
-    private fun setupRecyclerView() {
-        placemarkAdapter = PlacemarkAdapter(
-            onItemClicked = { item, position ->
-                val modal = PlacemarkModal.newInstance(item.placemark.id)
-                modal.show(parentFragmentManager, "PlacemarkViewModal")
-            }
-        )
-
-        binding.placemarksRecyclerView.apply {
-            adapter = placemarkAdapter
-            layoutManager = LinearLayoutManager(context)
-        }
-
-    }
-
-    private fun observeViewModel() {
-        viewLifecycleOwner.lifecycleScope.launch {
-            // Assuming lastKnownGpsLocation is the correct flow for general location updates not strictly tied to active navigation
-            navigationViewModel.lastKnownGpsLocation.collectLatest { location ->
-                placemarkViewModel.updateCurrentLocation(location) // Pass location to PlacemarksViewModel
-            }
-        }
-
-        viewLifecycleOwner.lifecycleScope.launch {
-            placemarkViewModel.displayItems.collectLatest { displayItems ->
-                placemarkAdapter.submitList(displayItems)
-                binding.emptyView.isVisible = displayItems.isEmpty()
-            }
-        }
-    }
-
 
     private fun openFilePicker() {
         val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
-            type = "application/json" // Only show JSON files
-            // Optionally, you can specify `Intent.EXTRA_MIME_TYPES` for multiple types
+            type = if (importType == "gas_stations") "*/*" else "application/json"
         }
         try {
             filePickerLauncher.launch(intent)
@@ -143,12 +118,6 @@ class PlacemarksFragment : Fragment() {
                 Toast.makeText(requireContext(), "Failed to read file", Toast.LENGTH_SHORT).show()
                 return
             }
-            // Now you have the InputStream, you can read the JSON content
-            // For example, pass it to your ViewModel to process
-//             val jsonString = inputStream.bufferedReader().use { it.readText() }
-//             placemarkViewModel.importPlacemarksFromJson(jsonString)
-
-            // For now, just log it and show a toast
             Log.d("PlacemarksFragment", "Successfully opened URI. Ready to process JSON.")
             Toast.makeText(
                 requireContext(),
@@ -156,17 +125,20 @@ class PlacemarksFragment : Fragment() {
                 Toast.LENGTH_LONG
             ).show()
 
-            // TODO: Implement the actual JSON parsing and import logic in your ViewModel
-//             Example:
             viewLifecycleOwner.lifecycleScope.launch {
-                val success = placemarkViewModel.importPlacemarksFromUri(uri)
+                val success = when (importType) {
+                    "placemarks" -> placemarkViewModel.importPlacemarksFromUri(uri)
+                    "gas_stations" -> placemarkViewModel.importGasStationsFromUri(uri)
+                    else -> false
+                }
+
                 if (success) {
-                    Toast.makeText(requireContext(), "Placemarks imported!", Toast.LENGTH_SHORT)
+                    Toast.makeText(requireContext(), "Import successful!", Toast.LENGTH_SHORT)
                         .show()
                 } else {
                     Toast.makeText(
                         requireContext(),
-                        "Failed to import placemarks.",
+                        "Failed to import.",
                         Toast.LENGTH_SHORT
                     ).show()
                 }
@@ -184,7 +156,6 @@ class PlacemarksFragment : Fragment() {
 
     override fun onDestroyView() {
         super.onDestroyView()
-        binding.placemarksRecyclerView.adapter = null // Important to clear adapter
         _binding = null
     }
 }

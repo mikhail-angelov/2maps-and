@@ -36,8 +36,6 @@ class PlacemarkLayerManager(
 
     companion object {
         private const val SOURCE_ID = "placemarks-source"
-        private const val LAYER_ID = "placemarks-layer"
-        private const val ICON_ID = "placemark-icon"
         private const val CIRCLE_LAYER_ID = "placemarks-circle-layer"
         private const val TEXT_LAYER_ID = "placemarks-text-layer"
 
@@ -49,14 +47,9 @@ class PlacemarkLayerManager(
 
 
     fun onStyleLoaded(style: Style) {
-//        addPlacemarkIcon(style)
         setupSource(style)
         setupCircleLayer(style)
-//        setupTextLayer(style)
-//        setupLayer(style)
-
         observePlacemarks()
-
     }
 
     private fun observePlacemarks() {

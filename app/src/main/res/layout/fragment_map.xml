@@ -59,6 +59,20 @@
         tools:visibility="visible" />
 
     <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fabToggleGasLayer"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginEnd="8dp"
+        android:contentDescription="Toggle Gas Layer"
+        android:src="@drawable/ic_local_gas_station"
+        android:visibility="gone"
+        app:layout_constraintBottom_toBottomOf="@+id/fabCenterOnLocationInFragment"
+        app:layout_constraintEnd_toStartOf="@+id/fabCenterOnLocationInFragment"
+        app:layout_constraintTop_toTopOf="@+id/fabCenterOnLocationInFragment"
+        tools:ignore="HardcodedText"
+        tools:visibility="visible" />
+
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/fabHideTrack"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
@@ -67,7 +81,7 @@
         android:src="@drawable/ic_timeline_off"
         android:visibility="gone"
         app:layout_constraintBottom_toBottomOf="@+id/fabCenterOnLocationInFragment"
-        app:layout_constraintEnd_toStartOf="@+id/fabCenterOnLocationInFragment"
+        app:layout_constraintEnd_toStartOf="@+id/fabToggleGasLayer"
         app:layout_constraintTop_toTopOf="@+id/fabCenterOnLocationInFragment"
         tools:ignore="HardcodedText"
         tools:visibility="visible" />

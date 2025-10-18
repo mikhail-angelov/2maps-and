@@ -3,11 +3,13 @@
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
     <item
-        android:id="@+id/action_import_json"
-        android:icon="@drawable/ic_menu_vector"
-        android:title="Import JSON"
-        app:showAsAction="ifRoom|withText" />
+        android:id="@+id/action_import_placemarks"
+        android:title="Import Placemarks"
+        app:showAsAction="never" />
 
-    <!-- Add other menu items here if needed -->
+    <item
+        android:id="@+id/action_import_gas_stations"
+        android:title="Import Gas Stations"
+        app:showAsAction="never" />
 
 </menu>

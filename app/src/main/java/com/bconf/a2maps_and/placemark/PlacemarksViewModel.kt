@@ -9,15 +9,11 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.bconf.a2maps_and.utils.PlacemarkUtils
 import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.withContext
-import java.io.InputStreamReader
 
 class PlacemarksViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -27,11 +23,29 @@ class PlacemarksViewModel(application: Application) : AndroidViewModel(applicati
     private val rawPlacemarks: StateFlow<List<Placemark>> = PlacemarkService.placemarks
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    private val rawGasStations: StateFlow<List<Placemark>> = PlacemarkService.gasStations
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val isGasLayerVisible: StateFlow<Boolean> = PlacemarkService.isGasLayerVisible
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
     // MutableStateFlow for the current location, to be updated from the Fragment
     private val _currentLocation = MutableStateFlow<Location?>(null)
 
     val displayItems: StateFlow<List<PlacemarkDisplayItem>> =
         rawPlacemarks.combine(_currentLocation) { placemarks, location ->
+            val mappedItems = placemarks.map { placemark ->
+                val distanceResult = PlacemarkUtils.calculateDistance(location, placemark)
+                PlacemarkDisplayItem(placemark, distanceResult.distanceString, distanceResult.distanceInMeters)
+            }
+            // Sort the items
+            mappedItems.sortedWith(compareBy {
+                if (it.distanceInMeters == null) Float.MAX_VALUE else it.distanceInMeters
+            })
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val gasStationItems: StateFlow<List<PlacemarkDisplayItem>> =
+        rawGasStations.combine(_currentLocation) { placemarks, location ->
             val mappedItems = placemarks.map { placemark ->
                 val distanceResult = PlacemarkUtils.calculateDistance(location, placemark)
                 PlacemarkDisplayItem(placemark, distanceResult.distanceString, distanceResult.distanceInMeters)
@@ -73,42 +87,31 @@ class PlacemarksViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     suspend fun importPlacemarksFromUri(uri: Uri): Boolean {
-        return withContext(Dispatchers.IO) { // Perform file I/O and parsing on a background thread
-            try {
-                app.applicationContext.contentResolver.openInputStream(uri)?.use { inputStream ->
-                    InputStreamReader(inputStream).use { reader ->
-                        val gson = Gson()
-                        val placemarkListType = object : TypeToken<List<Placemark>>() {}.type
-                        val importedPlacemarks: List<Placemark>? = gson.fromJson(reader, placemarkListType)
-
-                        if (importedPlacemarks == null) {
-                            Log.e("PlacemarksViewModel", "Failed to parse placemarks from JSON, result is null.")
-                            return@withContext false
-                        }
-
-                        Log.d("PlacemarksViewModel", "Successfully parsed ${importedPlacemarks.size} placemarks from URI.")
-
-                        var importCount = 0
-                        importedPlacemarks.forEach { importedPlacemark ->
-                            // Optional: Check for duplicates based on ID or other criteria if needed.
-                            // For this example, we'll add all of them.
-                            // If IDs should be unique and you expect potential clashes,
-                            // you might want to generate new IDs or have a conflict resolution strategy.
-
-                            // We will directly use the addPlacemark function which sends it to the service
-                            // The PlacemarkService should handle the actual addition to its list and persistence
-                            addPlacemark(importedPlacemark) // This internally calls startService
-                            importCount++
-                            Log.d("PlacemarksViewModel", "Sent imported placemark to service: ${importedPlacemark.name}")
-                        }
-                        Log.d("PlacemarksViewModel", "Finished sending $importCount placemarks to PlacemarkService.")
-                        true // Indicate success
-                    }
-                } ?: false // InputStream was null
-            } catch (e: Exception) {
-                Log.e("PlacemarkViewModel", "Error importing placemarks from URI", e)
-                false
-            }
+        Log.d("PlacemarksViewModel", "Sending import request to service for URI: $uri")
+        val serviceIntent = Intent(app, PlacemarkService::class.java).apply {
+            action = PlacemarkService.ACTION_IMPORT_PLACEMARKS_FROM_URI
+            data = uri
+            flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
         }
+        app.startService(serviceIntent)
+        return true
+    }
+
+    suspend fun importGasStationsFromUri(uri: Uri): Boolean {
+        Log.d("PlacemarksViewModel", "Sending import gas stations request to service for URI: $uri")
+        val serviceIntent = Intent(app, PlacemarkService::class.java).apply {
+            action = PlacemarkService.ACTION_IMPORT_GAS_STATIONS_FROM_URI
+            data = uri
+            flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
+        }
+        app.startService(serviceIntent)
+        return true
+    }
+
+    fun toggleGasLayerVisibility() {
+        val serviceIntent = Intent(app, PlacemarkService::class.java).apply {
+            action = PlacemarkService.ACTION_TOGGLE_GAS_LAYER_VISIBILITY
+        }
+        app.startService(serviceIntent)
     }
 }

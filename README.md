@@ -19,8 +19,7 @@ This is an advanced mapping and navigation application for Android, built with a
 
 </td>
 </tr>
-</table>
-<table>
+
 <tr>
 <td width="180" valign="top">
 <img width="160" height="340" alt="2025-10-13_18-35-02" src="https://github.com/user-attachments/assets/28872196-de4a-494d-b0b3-800dfc49680e" />
@@ -35,8 +34,6 @@ This is an advanced mapping and navigation application for Android, built with a
 
 </td>
 </tr>
-</table>
-<table>
 <tr>
 <td width="180" valign="top">
 <img width="160" height="340" alt="2025-10-13_18-34-37" src="https://github.com/user-attachments/assets/35fbe22d-e528-49e5-889f-a2064c9d8512" />
@@ -56,8 +53,6 @@ This is an advanced mapping and navigation application for Android, built with a
       
   </td>
 </tr>
-</table>
-<table>
 <tr>
 <td width="180" valign="top">
 <img width="160" height="340" alt="2025-10-13_18-35-30" src="https://github.com/user-attachments/assets/03eb169d-a4e1-4c03-b522-1c657de5760a" />
@@ -74,6 +69,24 @@ This is an advanced mapping and navigation application for Android, built with a
   - **Current Location Indicator:** Shows the user's current location on the map.
   - **"Center on Me" Functionality:** A floating action button allows the user to re-center the map on their current GPS location.
     
+  </td>
+</tr>
+<tr>
+<td width="180" valign="top">
+<img width="160" height="340" alt="2025-10-13_18-35-30" src="https://github.com/user-attachments/assets/03eb169d-a4e1-4c03-b522-1c657de5760a" />
+</td>
+<td valign="top">
+
+**Gas Stations:**
+- **Map Layer & Toggle:** Explained that gas stations appear on a separate map layer that can be shown or hidden, with the visibility state being saved.
+- **Import from File:** Clarified that gas stations are imported from .geojson files, with logic to prevent duplicate entries.
+    - **.geojson** file could be loaded from [https://overpass-turbo.eu/](https://overpass-turbo.eu/) with the following query:
+```
+node
+  [amenity=fuel]
+  ({{bbox}});
+out;
+```
   </td>
 </tr>
 </table>

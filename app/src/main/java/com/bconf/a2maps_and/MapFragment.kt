@@ -21,6 +21,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
 import androidx.navigation.fragment.navArgs
 import com.bconf.a2maps_and.navigation.NavigationState
+import com.bconf.a2maps_and.placemark.GasLayerManager
 import com.bconf.a2maps_and.placemark.PlacemarkLayerManager
 import com.bconf.a2maps_and.placemark.PlacemarkModal
 import com.bconf.a2maps_and.placemark.PlacemarksViewModel
@@ -60,6 +61,7 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
     private lateinit var map: MapLibreMap // Made public to be accessible from MainActivity if needed initially
 
     private lateinit var placemarkLayerManager: PlacemarkLayerManager
+    private lateinit var gasLayerManager: GasLayerManager
     private lateinit var trackLayerManager: TrackLayerManager
     private val navigationViewModel: NavigationViewModel by activityViewModels()
     private val placemarkViewModel: PlacemarksViewModel by activityViewModels()
@@ -70,6 +72,7 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
     private val ID_MENU_ADD_PLACEMARK = 2
     private var fabCenterOnLocation: FloatingActionButton? = null // Reference for the new FAB
     private var fabHideTrack: FloatingActionButton? = null
+    private var fabToggleGasLayer: FloatingActionButton? = null
     private var isUserPanning = false
     private var currentLocationSource: GeoJsonSource? = null
     private val CURRENT_LOCATION_SOURCE_ID = "current-location-source"
@@ -121,6 +124,7 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         rerouteButton = view.findViewById(R.id.rerouteButton)
         fabCenterOnLocation = view.findViewById(R.id.fabCenterOnLocationInFragment)
         fabHideTrack = view.findViewById(R.id.fabHideTrack)
+        fabToggleGasLayer = view.findViewById(R.id.fabToggleGasLayer)
         mainMenuButton = view.findViewById(R.id.mainMenuButton) // Initialize mainMenuButton
 
         mainMenuButton?.setOnClickListener { // Set click listener
@@ -152,6 +156,10 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         }
         fabHideTrack?.setOnClickListener {
             trackViewModel.clearTrack()
+        }
+
+        fabToggleGasLayer?.setOnClickListener {
+            placemarkViewModel.toggleGasLayerVisibility()
         }
 
         Log.d(
@@ -212,12 +220,17 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
                 }
             )
             placemarkLayerManager.onStyleLoaded(style)
+            gasLayerManager = GasLayerManager(requireContext(), map, placemarkViewModel, viewLifecycleOwner.lifecycle) { placemarkId ->
+                mapView.showContextMenu()
+            }
+            gasLayerManager.onStyleLoaded(style)
             trackLayerManager = TrackLayerManager(
                 requireContext(), map, trackViewModel,
                 viewLifecycleOwner.lifecycle,
             )
 
             if (initialPlacemarkLat != 999.0F && initialPlacemarkLng != 999.0F) {
+                isLocationLoaded = true //prevent camera movement on first load
                 val targetLatLng =
                     LatLng(initialPlacemarkLat.toDouble(), initialPlacemarkLng.toDouble())
                 val cameraPosition = CameraPosition.Builder()
@@ -228,7 +241,7 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
                     CameraUpdateFactory.newCameraPosition(cameraPosition),
                     1000
                 ) // Animate over 1 second
-                Log.d("MapFragment", "Centering map on: $targetLatLng")
+                Log.d("MapFragment", "Centering map on: $targetLatLng :: $initialPlacemarkLat | ")
 
                 // Optional: Highlight or show info for this placemark
                 // You might need to tell PlacemarkLayerManager to highlight this specific placemarkId
@@ -256,6 +269,7 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
             val lat = if (location.latitude == 0.0) 56.292374 else location.latitude
             val lng = if (location.longitude == 0.0) 43.985402 else location.longitude
             val currentLatLng = LatLng(lat, lng)
+            Log.d("MapFragment", "Centering map callback on: $currentLatLng")
             val cameraBuilder = CameraPosition.Builder().target(currentLatLng)
                 .zoom(map.cameraPosition.zoom.coerceAtLeast(15.0))
                 .padding(0.0, 0.0, 0.0, 0.0)
@@ -354,8 +368,10 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         } else {
             maneuverTextViewInFragment?.visibility = View.GONE
         }
-        fabCenterOnLocation?.visibility = if (isNavigatingOrOffRoute) View.GONE else View.VISIBLE
-        mainMenuButton?.visibility = if (isNavigatingOrOffRoute) View.GONE else View.VISIBLE
+        val showStandardFabs = !isNavigatingOrOffRoute
+        fabCenterOnLocation?.visibility = if (showStandardFabs) View.VISIBLE else View.GONE
+        mainMenuButton?.visibility = if (showStandardFabs) View.VISIBLE else View.GONE
+        fabToggleGasLayer?.visibility = if (showStandardFabs) View.VISIBLE else View.GONE
     }
 
 
@@ -449,16 +465,12 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
     }
 
     override fun onMapClick(point: LatLng): Boolean {
-        // First, let PlacemarkLayerManager try to handle the click
-        if (placemarkLayerManager.handleMapClick(point)) {
-            return true // Placemark click was handled
+        if (::placemarkLayerManager.isInitialized && placemarkLayerManager.handleMapClick(point)) {
+            return true
         }
-
-        // If not handled by PlacemarkLayerManager, do other map click logic if any
-        // For example, deselecting something or showing coordinates
-        Log.d("MapFragment", "Map clicked at: Lat ${point.latitude}, Lng ${point.longitude}")
-        // Return false if you want other listeners (if any) to also process this click,
-        // or true if you consider it handled here.
+        if (::gasLayerManager.isInitialized && gasLayerManager.handleMapClick(point)) {
+            return true
+        }
         return false
     }
 
@@ -635,4 +647,3 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
     }
 
 }
-
