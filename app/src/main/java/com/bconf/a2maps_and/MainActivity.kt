@@ -21,8 +21,8 @@ import androidx.navigation.ui.AppBarConfiguration
 import androidx.navigation.ui.NavigationUI
 import com.bconf.a2maps_and.navigation.NavigationState
 import com.bconf.a2maps_and.placemark.PlacemarkService
-import com.bconf.a2maps_and.service.NavigationEngineService
-import com.bconf.a2maps_and.ui.viewmodel.NavigationViewModel
+import com.bconf.a2maps_and.navigation.NavigationEngineService
+import com.bconf.a2maps_and.navigation.NavigationViewModel
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 

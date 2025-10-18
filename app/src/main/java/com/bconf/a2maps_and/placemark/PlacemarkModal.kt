@@ -21,7 +21,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.navigation.fragment.findNavController
 import com.bconf.a2maps_and.R
 import com.bconf.a2maps_and.databinding.BottomSheetPlacemarkBinding
-import com.bconf.a2maps_and.ui.viewmodel.NavigationViewModel
+import com.bconf.a2maps_and.navigation.NavigationViewModel
 import com.bconf.a2maps_and.utils.PlacemarkUtils
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
 import kotlinx.coroutines.flow.collectLatest

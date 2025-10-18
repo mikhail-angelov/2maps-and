@@ -1,4 +1,4 @@
-package com.bconf.a2maps_and.ui.viewmodel
+package com.bconf.a2maps_and.navigation
 
 import android.app.Application
 import android.content.Intent
@@ -8,12 +8,9 @@ import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.bconf.a2maps_and.R
-import com.bconf.a2maps_and.navigation.ActiveManeuverDetails
-import com.bconf.a2maps_and.navigation.NavigationState
 import com.bconf.a2maps_and.repository.RouteRepository
 import com.bconf.a2maps_and.routing.ValhallaLocation
 import com.bconf.a2maps_and.routing.ValhallaRouteResponse
-import com.bconf.a2maps_and.service.NavigationEngineService
 import com.bconf.a2maps_and.utils.PlacemarkUtils
 import com.google.gson.Gson
 import kotlinx.coroutines.flow.MutableSharedFlow

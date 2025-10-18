@@ -4,7 +4,6 @@ enum class NavigationState {
     IDLE,                  // Not navigating
     NAVIGATING,            // Actively navigating on-route
     OFF_ROUTE,             // User has deviated significantly from the route
-    ARRIVED,               // User has reached the destination
     ROUTE_CALCULATION,     // (Optional) If you want a state while Valhalla is being called
     ROUTE_CALCULATION_FAILED // Valhalla failed or returned no route
 }

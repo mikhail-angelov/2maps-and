@@ -24,7 +24,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.bconf.a2maps_and.R
 import com.bconf.a2maps_and.databinding.FragmentPlacemarksBinding
-import com.bconf.a2maps_and.ui.viewmodel.NavigationViewModel
+import com.bconf.a2maps_and.navigation.NavigationViewModel
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 

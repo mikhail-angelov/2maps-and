@@ -1,4 +1,4 @@
-package com.bconf.a2maps_and.service
+package com.bconf.a2maps_and.navigation
 
 import android.content.Context
 import android.location.Location
@@ -60,7 +60,9 @@ class GpxLogger(private val context: Context) {
     fun appendGpxTrackPoint(location: Location) {
         gpxFileWriter?.let { writer ->
             try {
-                val time = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.getDefault()).format(Date(location.time))
+                val time = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.getDefault()).format(
+                    Date(location.time)
+                )
                 writer.append("    <trkpt lat=\"${location.latitude}\" lon=\"${location.longitude}\">\n")
                 writer.append("      <ele>${location.altitude}</ele>\n")
                 writer.append("      <time>$time</time>\n")

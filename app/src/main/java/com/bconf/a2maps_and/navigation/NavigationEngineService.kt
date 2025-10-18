@@ -1,4 +1,4 @@
-package com.bconf.a2maps_and.service
+package com.bconf.a2maps_and.navigation
 
 
 import android.app.Notification
@@ -18,8 +18,6 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.bconf.a2maps_and.MainActivity
 import com.bconf.a2maps_and.R
-import com.bconf.a2maps_and.navigation.ActiveManeuverDetails
-import com.bconf.a2maps_and.navigation.NavigationState
 import com.bconf.a2maps_and.repository.RouteRepository
 import com.bconf.a2maps_and.routing.Maneuver
 import com.bconf.a2maps_and.routing.ValhallaLocation
@@ -297,9 +295,9 @@ class NavigationEngineService : Service() {
             ACTION_START_NAVIGATION -> {
                 Log.d("NavigationService", "Starting navigation...")
                 rerouteCount = 5
-                    try {
-                val routeJson = intent.getStringExtra(EXTRA_ROUTE_RESPONSE_JSON)
-                if (routeJson != null) {
+                try {
+                    val routeJson = intent.getStringExtra(EXTRA_ROUTE_RESPONSE_JSON)
+                    if (routeJson != null) {
                         val routeResponse =
                             Gson().fromJson(routeJson, ValhallaRouteResponse::class.java)
                         clearSavedNavigationState()
@@ -307,17 +305,17 @@ class NavigationEngineService : Service() {
                         startNavigationLogic(routeResponse)
                         startLocationUpdates()
 
-                } else {
-                    Log.e("NavigationEngineService", "Route JSON was null for START_NAVIGATION")
-                    _navigationState.value = NavigationState.ROUTE_CALCULATION_FAILED
-                    clearSavedNavigationState()
-                }
-                    } catch (e: Exception) {
-                        Log.e("NavigationEngineService", "Error parsing route for navigation", e)
+                    } else {
+                        Log.e("NavigationEngineService", "Route JSON was null for START_NAVIGATION")
                         _navigationState.value = NavigationState.ROUTE_CALCULATION_FAILED
                         clearSavedNavigationState()
-                        stopSelf()
                     }
+                } catch (e: Exception) {
+                    Log.e("NavigationEngineService", "Error parsing route for navigation", e)
+                    _navigationState.value = NavigationState.ROUTE_CALCULATION_FAILED
+                    clearSavedNavigationState()
+                    stopSelf()
+                }
             }
 
             ACTION_STOP_NAVIGATION -> {
@@ -537,19 +535,19 @@ class NavigationEngineService : Service() {
     }
 
     private fun onNewLocationLogic(location: Location) {
-        if (_navigationState.value == NavigationState.NAVIGATING) {
-            gpxLogger.appendGpxTrackPoint(location)
-        }
         //drop location with low accuracy
         if (location.accuracy > 230) {
             return
+        }
+        if (navigationState.value != NavigationState.IDLE) {
+            gpxLogger.appendGpxTrackPoint(location)
         }
 
         _lastLocation.value = location
         saveLastLocation(location)
 
 
-        if ((_navigationState.value != NavigationState.NAVIGATING && _navigationState.value != NavigationState.OFF_ROUTE) || originalFullRoutePath.size < 2) {
+        if (navigationState.value == NavigationState.IDLE || originalFullRoutePath.size < 2) {
             return
         }
 
@@ -559,12 +557,12 @@ class NavigationEngineService : Service() {
             originalFullRoutePath.lastOrNull()?.let { destination ->
                 if (currentLocationLatLng.distanceTo(destination) < arrivalThresholdMeters) {
                     Log.i("NavigationEngineService", "User has ARRIVED at destination.")
-                    _navigationState.value = NavigationState.ARRIVED
+                    _navigationState.value = NavigationState.IDLE
                     _currentDisplayedPath.value = emptyList()
                     _activeManeuverDetails.value = null
                     _remainingDistanceInMeters.value = 0.0
                     updateNotificationText("Arrived at destination.")
-                    stopNavigationAndService()
+//                    stopNavigationAndService()
                     return@launch
                 }
             }
@@ -599,7 +597,8 @@ class NavigationEngineService : Service() {
             val distanceToRouteLine = currentLocationLatLng.distanceTo(snappedPointOnRoute)
 
             if (distanceToRouteLine <= offRouteThresholdMeters) {
-                if (_navigationState.value == NavigationState.OFF_ROUTE) {
+                if (_navigationState.value != NavigationState.NAVIGATING && _navigationState.value != NavigationState.IDLE) {
+                    //return to route
                     _navigationState.value = NavigationState.NAVIGATING
                     updateNotificationText("Back on route. Navigating...")
                     Log.i("NavigationEngineService", "User is back ON-ROUTE.")
