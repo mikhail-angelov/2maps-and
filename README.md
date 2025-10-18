@@ -73,7 +73,7 @@ This is an advanced mapping and navigation application for Android, built with a
 </tr>
 <tr>
 <td width="180" valign="top">
-<img width="160" height="340" alt="2025-10-13_18-35-30" src="https://github.com/user-attachments/assets/03eb169d-a4e1-4c03-b522-1c657de5760a" />
+<img width="160" height="340" alt="2025-10-13_18-35-30" src="https://github.com/user-attachments/assets/4e2e10a5-0fc3-426d-ba08-b4a0a15d6e61" />
 </td>
 <td valign="top">
 
