@@ -612,6 +612,7 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         if (shouldFollow) {
 
             // Calculate padding to shift the location 100px from the bottom
+            isUserPanning = false
             val bottomPaddingPx = 2000f
             val density = resources.displayMetrics.density
             val topPaddingDp = (bottomPaddingPx / density).toDouble()

@@ -301,9 +301,9 @@ class NavigationEngineService : Service() {
                         val routeResponse =
                             Gson().fromJson(routeJson, ValhallaRouteResponse::class.java)
                         clearSavedNavigationState()
+                        startForegroundServiceWithNotification()
                         saveNavigationState(routeResponse)
                         startNavigationLogic(routeResponse)
-                        startLocationUpdates()
 
                     } else {
                         Log.e("NavigationEngineService", "Route JSON was null for START_NAVIGATION")
@@ -328,7 +328,6 @@ class NavigationEngineService : Service() {
             }
 
             ACTION_START_LOCATION_SERVICE -> {
-                startForegroundServiceWithNotification()
                 startLocationUpdates()
             }
 
@@ -427,8 +426,6 @@ class NavigationEngineService : Service() {
                         // You would then call startNavigationLogic (or a similar method)
                         // to re-initialize the navigation with this new route.
                         startNavigationLogic(newRouteResponse)
-                        // You might need to update the _navigationState to NAVIGATING
-                        _navigationState.value = NavigationState.NAVIGATING
                     } else {
                         Log.w(
                             "NavEngineService",
@@ -770,7 +767,8 @@ class NavigationEngineService : Service() {
 
         val notificationBuilder = NotificationCompat.Builder(this, notificationChannelId)
         val notification = notificationBuilder.setOngoing(true)
-            .setContentText("Tracking your location...")
+            .setContentText("2 Maps Navigation")
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setPriority(NotificationCompat.PRIORITY_MIN)
             .setCategory(Notification.CATEGORY_SERVICE)
             .build()
@@ -784,25 +782,6 @@ class NavigationEngineService : Service() {
         } else {
             startForeground(NOTIFICATION_ID, notification)
         }
-    }
-
-    private fun buildNotification(contentText: String): Notification {
-        val notificationIntent = Intent(this, MainActivity::class.java)
-        val pendingIntentFlags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        } else {
-            PendingIntent.FLAG_UPDATE_CURRENT
-        }
-        val pendingIntent =
-            PendingIntent.getActivity(this, 0, notificationIntent, pendingIntentFlags)
-
-        return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("2Maps Navigation")
-            .setContentText(contentText)
-            .setSmallIcon(R.drawable.ic_navigation)
-            .setContentIntent(pendingIntent)
-            .setOngoing(true)
-            .build()
     }
 
     private fun createNotificationChannel() {
@@ -841,8 +820,6 @@ class NavigationEngineService : Service() {
                 Gson().fromJson(routeJson, ValhallaRouteResponse::class.java)
 
             startNavigationLogic(restoredRouteResponse)
-            _navigationState.value = NavigationState.NAVIGATING
-            startLocationUpdates()
             startForegroundServiceWithNotification()
             Log.i("NavigationEngineService", "Navigation state restored. Current state: ${_navigationState.value}")
 
