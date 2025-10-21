@@ -1,0 +1,68 @@
+# This workflow builds a signed APK and creates a GitHub Release when a tag is pushed.
+name: Build and Release APK
+
+on:
+  push:
+    tags:
+      - 'v*.*.*' # Triggers the workflow on push events to tags like v1.0.0, v2.3.4, etc.
+
+jobs:
+  build-and-release:
+    name: Build, Sign, and Release APK
+    runs-on: ubuntu-latest # Use the latest Ubuntu runner
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4 # Checks out your repository's code
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17' # Set up the Java version required for modern Android builds
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3 # Sets up Gradle with caching for faster builds
+
+#      - name: Decode and write signing key
+#        id: decode_keystore
+#        # Reads the base64-encoded secret, decodes it, and writes it to a temporary file.
+#        # The file path is then exposed as an environment variable for subsequent steps.
+#        run: |
+#          KEYSTORE_FILE_PATH="${{ runner.temp }}/keystore.jks"
+#          echo "${{ secrets.SIGNING_KEY_BASE64 }}" | base64 --decode > "$KEYSTORE_FILE_PATH"
+#          echo "KEYSTORE_FILE=$KEYSTORE_FILE_PATH" >> $GITHUB_ENV
+#        env:
+#          SIGNING_KEY_BASE64: ${{ secrets.SIGNING_KEY_BASE64 }}
+
+      - name: Build and Sign Release APK
+        # Runs the Gradle wrapper to assemble the release build.
+        # Secrets are passed as environment variables, which should be configured in your build.gradle file.
+        run: ./gradlew :app:assembleRelease
+#        env:
+#          SIGNING_KEY_FILE: ${{ env.KEYSTORE_FILE }}
+#          KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
+#          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+#          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+
+      - name: Create GitHub Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # This token is automatically provided by GitHub
+        with:
+          tag_name: ${{ github.ref_name }} # Use the tag that triggered the workflow
+          release_name: 'Release ${{ github.ref_name }}'
+          body: "Release for version ${{ github.ref_name }}"
+          draft: false
+          prerelease: false
+
+      - name: Upload APK to Release
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }} # URL from the 'Create Release' step
+          asset_path: app/build/outputs/apk/release/app-release.apk # Path to the generated APK
+          asset_name: app-release.apk # Name of the asset in the release
+          asset_content_type: application/vnd.android.package-archive
