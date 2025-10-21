@@ -90,7 +90,7 @@ class NavigationEngineService : Service() {
         const val ACTION_REROUTE_NAVIGATION =
             "com.bconf.a2maps_and.action.ACTION_REROUTE_NAVIGATION"
         const val ACTION_START_LOCATION_SERVICE = "ACTION_START_LOCATION_SERVICE"
-        const val ACTION_STOP_LOCATION_SERVICE = "ACTION_STOP_LOCATION_SERVICE"
+        const val ACTION_STOP_SERVICE = "ACTION_STOP_SERVICE"
         const val EXTRA_ROUTE_RESPONSE_JSON = "extra_route_response_json"
         private const val PREFS_NAME = "NavigationEnginePrefs"
         private const val KEY_SAVED_ROUTE_RESPONSE = "savedRouteResponse"
@@ -332,10 +332,10 @@ class NavigationEngineService : Service() {
                 startLocationUpdates()
             }
 
-            ACTION_STOP_LOCATION_SERVICE -> {
-                stopLocationUpdates()
-                stopForeground(STOP_FOREGROUND_DETACH)
-                stopSelf()
+            ACTION_STOP_SERVICE -> {
+                Log.i("NavEngineService", "Received ACTION_STOP_SERVICE. Shutting down.")
+                stopService()
+                return START_NOT_STICKY // Service will not be recreated.
             }
             // Example: Handling when the service is restarted by the system
             else -> {
@@ -355,7 +355,7 @@ class NavigationEngineService : Service() {
                 }
             }
         }
-        return START_NOT_STICKY
+        return START_STICKY
     }
 
     private fun startNavigationLogic(routeResponse: ValhallaRouteResponse) {
@@ -562,7 +562,7 @@ class NavigationEngineService : Service() {
                     _activeManeuverDetails.value = null
                     _remainingDistanceInMeters.value = 0.0
                     updateNotificationText("Arrived at destination.")
-//                    stopNavigationAndService()
+                    stopNavigationAndService()
                     return@launch
                 }
             }
@@ -859,15 +859,12 @@ class NavigationEngineService : Service() {
      */
     override fun onTaskRemoved(rootIntent: Intent?) {
         Log.d("NavigationService", "Task removed, stopping service.")
-        stopNavigationAndService()
+        stopService()
         super.onTaskRemoved(rootIntent)
     }
 
     private fun stopNavigationAndService() {
         Log.d("NavigationService", "stopNavigationAndService called.")
-        // 1. Stop your actual navigation logic here (e.g., stop location updates, release resources)
-        // Example: myNavigationManager.stop()
-        // Example: fusedLocationClient.removeLocationUpdates(locationCallback)
 
         gpxLogger.stopGpxLogging()
         _navigationState.value = NavigationState.IDLE
@@ -881,19 +878,26 @@ class NavigationEngineService : Service() {
         clearSavedNavigationState()
         updateNotificationText("Navigation stopped.")
 
-        // 2. Stop the foreground state and remove the notification
-        stopForeground(true) // Pass true to remove the notification as well
+        stopForeground(STOP_FOREGROUND_REMOVE) // Pass true to remove the notification.
 
-        // 3. Stop the service itself
-        stopSelf()
-        Log.d("NavigationService", "Service definitively stopped.")
+        Log.d("NavigationService", "navigation definitively stopped.")
     }
+    private fun stopService() {
+        Log.i("NavEngineService", "stopService called. Cleaning up...")
+        stopNavigationAndService()
+        stopLocationUpdates()
+
+        // Cancel any ongoing coroutines.
+        serviceJob.cancel()
+
+        // stop the service itself.
+        stopSelf()
+    }
+
 
     override fun onDestroy() {
         Log.d("NavigationService", "onDestroy: Service is being destroyed.")
         super.onDestroy()
-//        serviceScope.cancel()
-//        stopLocationUpdates()
-//        gpxLogger.stopGpxLogging()
+        stopService()
     }
 }

@@ -33,7 +33,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var toolbar: Toolbar // Make Toolbar a class variable
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        Log.d("MainActivity", "=========start=======")
         super.onCreate(savedInstanceState)
         navigationViewModel = ViewModelProvider(this).get(NavigationViewModel::class.java)
         setContentView(R.layout.activity_main)
@@ -146,15 +145,7 @@ class MainActivity : AppCompatActivity() {
                 ) == PackageManager.PERMISSION_GRANTED
 
         if (foregroundPermissionsGranted) {
-//            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-//                if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_BACKGROUND_LOCATION) == PackageManager.PERMISSION_GRANTED) {
-//                    startLocationService()
-//                } else {
-//                    requestLocationPermissionLauncher.launch(permissionsToRequest.toTypedArray())
-//                }
-//            } else {
             startLocationService()
-//            }
         } else {
             requestLocationPermissionLauncher.launch(permissionsToRequest.toTypedArray())
         }
@@ -163,27 +154,24 @@ class MainActivity : AppCompatActivity() {
     private fun startLocationService() {
         Intent(this, NavigationEngineService::class.java).also {
             it.action = NavigationEngineService.ACTION_START_LOCATION_SERVICE
-//             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-//                startForegroundService(it)
-//            } else {
             startService(it)
-//            }
         }
         Intent(this, PlacemarkService::class.java).also {
             it.action = PlacemarkService.ACTION_START
-//             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-//                startForegroundService(it)
-//            } else {
             startService(it)
-//            }
         }
     }
 
     private fun stopLocationService() {
-        Intent(this, NavigationEngineService::class.java).also {
-            it.action = NavigationEngineService.ACTION_STOP_LOCATION_SERVICE
-            startService(it)
-        }
+        // Create an explicit intent to stop the NavigationEngineService.
+        val stopIntent = Intent(this, NavigationEngineService::class.java)
+        // Set an action that the service can listen for to know it should stop itself.
+        stopIntent.action = NavigationEngineService.ACTION_STOP_SERVICE
+        startService(stopIntent)
+        // Also, explicitly call stopService to be safe.
+        stopService(stopIntent)
+        // Log this action for debugging.
+        Log.i("MainActivity", "onDestroy called: Sent request to stop NavigationEngineService.")
     }
 
 
@@ -198,6 +186,11 @@ class MainActivity : AppCompatActivity() {
         window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
     }
 
+    /**
+     * This method is called when the activity is being finally destroyed,
+     * such as when the user swipes the app away from the recents screen.
+     * This is the ideal place to ensure our foreground service is stopped.
+     */
     override fun onDestroy() {
         super.onDestroy()
         stopLocationService()
