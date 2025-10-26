@@ -28,6 +28,7 @@ class MainMenuFragment : Fragment() {
         val menuItems = listOf(
             MainMenuItem("Placemarks", actionId = R.id.action_mainMenuFragment_to_placemarksFragment),
             MainMenuItem("Tracks", actionId = R.id.action_mainMenuFragment_to_tracksFragment),
+            MainMenuItem("Maps", actionId = R.id.action_mainMenuFragment_to_mapsFragment),
             MainMenuItem("Import Placemarks") { showImportPlacemarksToast() }
         )
 

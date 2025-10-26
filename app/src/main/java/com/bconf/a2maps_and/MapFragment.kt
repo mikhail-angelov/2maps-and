@@ -1,6 +1,7 @@
 package com.bconf.a2maps_and
 
 import android.content.Context
+import android.database.sqlite.SQLiteDatabase
 import android.graphics.Color
 import android.location.Location
 import android.os.Bundle
@@ -391,25 +392,106 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
     fun loadInitialMapStyle(onStyleLoaded: ((style: Style) -> Unit)? = null) {
         if (!::map.isInitialized) return
 
-        val file = getFileFromAssets(context, "niz-osm.mbtiles")
-        Log.i("--files", file.absolutePath)
+        val sharedPreferences = requireContext().getSharedPreferences("maps_prefs", Context.MODE_PRIVATE)
+        val selectedMapPath = sharedPreferences.getString("selected_map", null)
 
-        val styleJson =
-            context?.assets?.open("bright.json")?.bufferedReader().use { it?.readText() }
-        if (styleJson == null) {
-            Log.e("MapFragment", "Failed to read bright.json")
+        val file = if (selectedMapPath != null) {
+            File(selectedMapPath)
+        } else {
+            getFileFromAssets(context, "niz-osm.mbtiles")
+        }
+
+        if (!file.exists()) {
+            Log.e("MapFragment", "Map file does not exist: ${file.absolutePath}")
+            // Fallback to default map
+            val defaultFile = getFileFromAssets(context, "niz-osm.mbtiles")
+            loadMapStyle(defaultFile, onStyleLoaded)
             return
         }
 
-        val updatedStyleJson = styleJson.replace(
-            "\"url\": \"asset://niz-osm.mbtiles\"",
-            "\"url\": \"mbtiles://${file.absolutePath}\""
-        )
+        loadMapStyle(file, onStyleLoaded)
+    }
+
+    private fun loadMapStyle(file: File, onStyleLoaded: ((style: Style) -> Unit)?) {
+        Log.i("--files", file.absolutePath)
+
+        val format = try {
+            val db =
+                SQLiteDatabase.openDatabase(file.absolutePath, null, SQLiteDatabase.OPEN_READONLY)
+            val cursor =
+                db.query("metadata", arrayOf("value"), "name = ?", arrayOf("format"), null, null, null)
+            var formatValue: String? = null
+            if (cursor.moveToFirst()) {
+                formatValue = cursor.getString(0)
+            }
+            cursor.close()
+            db.close()
+            formatValue
+        } catch (e: Exception) {
+            Log.e("MapFragment", "Error reading mbtiles metadata", e)
+            null // Fallback
+        }
+
+        val styleJson = when (format) {
+            "pbf", "mvt" -> {
+                // It's a vector tileset, use the bright style
+                context?.assets?.open("bright.json")?.bufferedReader()?.use { it.readText() }
+                    ?.replace(
+                        "\"url\": \"asset://niz-osm.mbtiles\"",
+                        "\"url\": \"mbtiles://${file.absolutePath}\""
+                    )
+            }
+
+            "png", "jpg" -> {
+                // It's a raster tileset, generate a raster style
+                """
+            {
+              "version": 8,
+              "name": "Raster MBTiles",
+              "sources": {
+                "raster-tiles": {
+                  "type": "raster",
+                  "url": "mbtiles://${file.absolutePath}",
+                  "tileSize": 256
+                }
+              },
+              "layers": [
+                {
+                  "id": "simple-tiles",
+                  "type": "raster",
+                  "source": "raster-tiles",
+                  "minzoom": 0,
+                  "maxzoom": 22
+                }
+              ]
+            }
+            """.trimIndent()
+            }
+
+            else -> {
+                Log.w(
+                    "MapFragment",
+                    "Unknown or unsupported mbtiles format: '$format'. Falling back to vector style."
+                )
+                // Fallback to vector style for unknown formats.
+                context?.assets?.open("bright.json")?.bufferedReader()?.use { it.readText() }
+                    ?.replace(
+                        "\"url\": \"asset://niz-osm.mbtiles\"",
+                        "\"url\": \"mbtiles://${file.absolutePath}\""
+                    )
+            }
+        }
+
+
+        if (styleJson == null) {
+            Log.e("MapFragment", "Failed to create style JSON for ${file.absolutePath}")
+            return
+        }
 
         map.setStyle(
-            Style.Builder().fromJson(updatedStyleJson)
+            Style.Builder().fromJson(styleJson)
         ) { style ->
-            Log.i("MapFragment", "Style loaded.")
+            Log.i("MapFragment", "Style loaded for format '$format'.")
             onStyleLoaded?.invoke(style)
         }
     }

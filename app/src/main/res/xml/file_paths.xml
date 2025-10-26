@@ -4,4 +4,8 @@
     <files-path
         name="gpx_tracks"
         path="gpx/" />
+    <!-- Define a path for the 'maps' subdirectory within internal files dir -->
+    <files-path
+        name="maps"
+        path="maps/" />
 </paths>

@@ -42,12 +42,17 @@
             app:destination="@id/trackFragment"
             app:popUpTo="@id/mainMenuFragment"
             app:popUpToInclusive="true" />
+        <action
+            android:id="@+id/action_mainMenuFragment_to_mapsFragment"
+            app:destination="@id/mapsFragment"
+            app:popUpTo="@id/mainMenuFragment"
+            app:popUpToInclusive="true" />
     </fragment>
 
     <fragment
         android:id="@+id/placemarksFragment"
         android:name="com.bconf.a2maps_and.placemark.PlacemarksFragment"
-        android:label="Placemarks"
+        android_label="Placemarks"
         tools:layout="@layout/fragment_placemarks" />
         <action
             android:id="@+id/action_placemarksFragment_to_mapFragment"
@@ -57,4 +62,13 @@
         android:name="com.bconf.a2maps_and.track.TrackFragment"
         android:label="Tracks"
         tools:layout="@layout/fragment_track" />
+    <fragment
+        android:id="@+id/mapsFragment"
+        android:name="com.bconf.a2maps_and.maps.MapsFragment"
+        android:label="Maps"
+        tools:layout="@layout/fragment_maps">
+        <action
+            android:id="@+id/action_mapsFragment_to_mapFragment"
+            app:destination="@id/mapFragment" />
+    </fragment>
 </navigation>
