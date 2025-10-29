@@ -202,7 +202,7 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
                     LatLng(initialPlacemarkLat.toDouble(), initialPlacemarkLng.toDouble())
                 val cameraPosition = CameraPosition.Builder()
                     .target(targetLatLng)
-                    .zoom(15.0)
+                    .zoom(13.0)
                     .build()
                 map.animateCamera(
                     CameraUpdateFactory.newCameraPosition(cameraPosition),
@@ -232,7 +232,7 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
             val lng = if (location.longitude == 0.0) 43.985402 else location.longitude
             val currentLatLng = LatLng(lat, lng)
             val cameraBuilder = CameraPosition.Builder().target(currentLatLng)
-                .zoom(map.cameraPosition.zoom.coerceAtLeast(15.0))
+                .zoom(map.cameraPosition.zoom.coerceAtLeast(13.0))
                 .padding(0.0, 0.0, 0.0, 0.0)
                 .tilt(0.0)
 
@@ -281,17 +281,17 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         viewLifecycleOwner.lifecycleScope.launch {
             navigationViewModel.navigationState.collectLatest { navState ->
                 updateNavigationUi(navState)
-
-                if (navState == NavigationState.NAVIGATING && navigationViewModel.currentDisplayedPath.value.isNotEmpty()) {
-                    if (map.cameraPosition.zoom < 10) {
-                        zoomToRoute(navigationViewModel.currentDisplayedPath.value)
-                    }
+            }
+            navigationViewModel.lastKnownGpsLocation.collectLatest { location ->
+                if (location != null) {
+                    updateCurrentLocationIndicatorAndCamera(location)
                 }
             }
         }
         viewLifecycleOwner.lifecycleScope.launch {
             trackViewModel.trackPoints.collectLatest { points ->
                 fabHideTrack?.visibility = if (points.isNotEmpty()) View.VISIBLE else View.GONE
+                if(points.isNotEmpty()) zoomToRoute(points)
             }
         }
 
@@ -334,17 +334,12 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
             val currentLatLng = LatLng(lat, lng)
 
             val cameraBuilder = CameraPosition.Builder().target(currentLatLng)
-                .zoom(map.cameraPosition.zoom.coerceAtLeast(15.0))
+                .zoom(map.cameraPosition.zoom.coerceAtLeast(13.0))
                 .padding(0.0, 0.0, 0.0, 0.0)
 
-            if (state == CenterOnLocationState.FOLLOW) {
+            if (state == CenterOnLocationState.FOLLOW || state == CenterOnLocationState.RECORD) {
                 cameraBuilder.tilt(0.0)
                 cameraBuilder.bearing(0.0)
-            } else if (state == CenterOnLocationState.RECORD) {
-                cameraBuilder.tilt(50.0)
-                if (location.hasBearing()) {
-                    cameraBuilder.bearing(location.bearing.toDouble())
-                }
             }
 
             map.animateCamera(CameraUpdateFactory.newCameraPosition(cameraBuilder.build()), 600)
@@ -437,12 +432,6 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         if (::mapView.isInitialized) mapView.onDestroy()
     }
 
-    override fun onMapLongClick(point: LatLng): Boolean {
-        longPressedLatLng = point
-        mapView.showContextMenu()
-        return true
-    }
-
     override fun onMapClick(point: LatLng): Boolean {
         val screenPoint = map.projection.toScreenLocation(point)
         val features = map.queryRenderedFeatures(screenPoint, "placemarks")
@@ -463,6 +452,12 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
             return true
         }
         return false
+    }
+
+    override fun onMapLongClick(point: LatLng): Boolean {
+        longPressedLatLng = point
+        mapView.showContextMenu()
+        return true
     }
 
     override fun onCreateContextMenu(

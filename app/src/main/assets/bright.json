@@ -48,7 +48,7 @@
   "sources": {
     "openmaptiles": {
       "type": "vector",
-      "url": "asset://niz-osm.mbtiles"
+      "url": "asset://planet.mbtiles"
     }
   },
   "sprite": "asset://sprites/sprite",

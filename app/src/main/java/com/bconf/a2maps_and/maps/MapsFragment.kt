@@ -77,7 +77,7 @@ class MapsFragment : Fragment() {
 
         mapsViewModel = ViewModelProvider(this).get(MapsViewModel::class.java)
 
-        mapsAdapter = MapsAdapter(emptyList())
+        mapsAdapter = MapsAdapter(emptyList(), requireContext())
         binding.mapsRecyclerView.apply {
             layoutManager = LinearLayoutManager(context)
             adapter = mapsAdapter

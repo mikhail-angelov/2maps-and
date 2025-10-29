@@ -1,15 +1,19 @@
 package com.bconf.a2maps_and.maps
 
 import android.content.Context
+import android.graphics.Color
 import android.view.LayoutInflater
 import android.view.ViewGroup
+import androidx.core.content.ContextCompat
 import androidx.navigation.findNavController
 import androidx.recyclerview.widget.RecyclerView
 import com.bconf.a2maps_and.R
 import com.bconf.a2maps_and.databinding.ItemMapBinding
 import java.io.File
 
-class MapsAdapter(private var maps: List<File>) : RecyclerView.Adapter<MapsAdapter.MapViewHolder>() {
+class MapsAdapter(private var maps: List<File>, private val context: Context) : RecyclerView.Adapter<MapsAdapter.MapViewHolder>() {
+
+    private var selectedPosition = RecyclerView.NO_POSITION
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): MapViewHolder {
         val binding = ItemMapBinding.inflate(LayoutInflater.from(parent.context), parent, false)
@@ -17,10 +21,30 @@ class MapsAdapter(private var maps: List<File>) : RecyclerView.Adapter<MapsAdapt
     }
 
     override fun onBindViewHolder(holder: MapViewHolder, position: Int) {
+        val position = holder.getAdapterPosition()
         val map = maps[position]
         holder.binding.mapName.text = map.name
+
+        val sharedPreferences = holder.itemView.context.getSharedPreferences("maps_prefs", Context.MODE_PRIVATE)
+        val selectedMapPath = sharedPreferences.getString("selected_map", null)
+
+        if (selectedMapPath != null && selectedMapPath == map.absolutePath) {
+            selectedPosition = position
+        }
+
+        if (position == selectedPosition) {
+            holder.itemView.setBackgroundColor(ContextCompat.getColor(context, R.color.selected_item_color))
+        } else {
+            holder.itemView.setBackgroundColor(Color.TRANSPARENT)
+        }
+
         holder.itemView.setOnClickListener {
-            val sharedPreferences = holder.itemView.context.getSharedPreferences("maps_prefs", Context.MODE_PRIVATE)
+            if (selectedPosition != holder.adapterPosition) {
+                notifyItemChanged(selectedPosition)
+                selectedPosition = holder.adapterPosition
+                notifyItemChanged(selectedPosition)
+            }
+
             with(sharedPreferences.edit()) {
                 putString("selected_map", map.absolutePath)
                 apply()

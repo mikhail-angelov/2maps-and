@@ -3,9 +3,6 @@ package com.bconf.a2maps_and.maps
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.graphics.Color
-import android.util.Log
-import org.json.JSONArray
-import org.json.JSONObject
 import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.Style
@@ -39,11 +36,11 @@ class MapsLayerManager(private val context: Context, private val map: MapLibreMa
         val file = if (selectedMapPath != null) {
             File(selectedMapPath)
         } else {
-            getFileFromAssets(context, "niz-osm.mbtiles")
+            getFileFromAssets(context, "planet.mbtiles")
         }
 
         if (!file.exists()) {
-            val defaultFile = getFileFromAssets(context, "niz-osm.mbtiles")
+            val defaultFile = getFileFromAssets(context, "planet.mbtiles")
             loadMapStyleFromFile(defaultFile, onStyleLoaded)
             return
         }
@@ -71,7 +68,15 @@ class MapsLayerManager(private val context: Context, private val map: MapLibreMa
             val db =
                 SQLiteDatabase.openDatabase(file.absolutePath, null, SQLiteDatabase.OPEN_READONLY)
             val cursor =
-                db.query("metadata", arrayOf("value"), "name = ?", arrayOf("format"), null, null, null)
+                db.query(
+                    "metadata",
+                    arrayOf("value"),
+                    "name = ?",
+                    arrayOf("format"),
+                    null,
+                    null,
+                    null
+                )
             var formatValue: String? = null
             if (cursor.moveToFirst()) {
                 formatValue = cursor.getString(0)
@@ -87,7 +92,7 @@ class MapsLayerManager(private val context: Context, private val map: MapLibreMa
             "pbf", "mvt" -> {
                 context.assets?.open("bright.json")?.bufferedReader()?.use { it.readText() }
                     ?.replace(
-                        "\"url\": \"asset://niz-osm.mbtiles\"",
+                        "\"url\": \"asset://planet.mbtiles\"",
                         "\"url\": \"mbtiles://${file.absolutePath}\""
                     )
             }
@@ -120,7 +125,7 @@ class MapsLayerManager(private val context: Context, private val map: MapLibreMa
             else -> {
                 context.assets?.open("bright.json")?.bufferedReader()?.use { it.readText() }
                     ?.replace(
-                        "\"url\": \"asset://niz-osm.mbtiles\"",
+                        "\"url\": \"asset://planet.mbtiles\"",
                         "\"url\": \"mbtiles://${file.absolutePath}\""
                     )
             }
@@ -189,7 +194,7 @@ class MapsLayerManager(private val context: Context, private val map: MapLibreMa
             val lineString = LineString.fromLngLats(routeSegment.map {
                 Point.fromLngLat(it.longitude, it.latitude)
             })
-            if(routeSource == null) {
+            if (routeSource == null) {
                 routeSource = GeoJsonSource(ROUTE_SOURCE_ID, lineString)
                 style.addSource(routeSource!!)
                 val routeLayer = LineLayer(ROUTE_LAYER_ID, ROUTE_SOURCE_ID).apply {
@@ -202,7 +207,7 @@ class MapsLayerManager(private val context: Context, private val map: MapLibreMa
                 }
                 style.addLayerBelow(routeLayer, CURRENT_LOCATION_LAYER_ID)
             } else {
-                 routeSource?.setGeoJson(lineString)
+                routeSource?.setGeoJson(lineString)
             }
         }
     }
