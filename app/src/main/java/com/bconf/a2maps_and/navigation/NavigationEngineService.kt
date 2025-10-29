@@ -86,15 +86,18 @@ class NavigationEngineService : Service() {
     companion object {
         const val ACTION_START_NAVIGATION = "com.bconf.a2maps_and.action.START_NAVIGATION"
         const val ACTION_STOP_NAVIGATION = "com.bconf.a2maps_and.action.STOP_NAVIGATION"
+        const val ACTION_SET_CENTER_ON_LOCATION_STATE = "com.bconf.a2maps_and.action.SET_CENTER_ON_LOCATION_STATE"
 
         const val ACTION_REROUTE_NAVIGATION =
             "com.bconf.a2maps_and.action.ACTION_REROUTE_NAVIGATION"
         const val ACTION_START_LOCATION_SERVICE = "ACTION_START_LOCATION_SERVICE"
         const val ACTION_STOP_SERVICE = "ACTION_STOP_SERVICE"
         const val EXTRA_ROUTE_RESPONSE_JSON = "extra_route_response_json"
+        const val EXTRA_CENTER_ON_LOCATION_STATE = "extra_center_on_location_state"
         private const val PREFS_NAME = "NavigationEnginePrefs"
         private const val KEY_SAVED_ROUTE_RESPONSE = "savedRouteResponse"
         private const val KEY_LAST_LOCATION = "last_location"
+        private const val KEY_CENTER_ON_LOCATION_STATE = "centerOnLocationState"
 
         private const val LOCATION_UPDATE_INTERVAL = 10000L
         private const val FASTEST_LOCATION_INTERVAL = 5000L
@@ -288,8 +291,6 @@ class NavigationEngineService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Log.d("NavigationEngineService", "onStartCommand, action: ${intent?.action}")
-//        val notification = buildNotification("Navigation Service Active")
-//        startForeground(NOTIFICATION_ID, notification)
 
         when (intent?.action) {
             ACTION_START_NAVIGATION -> {
@@ -331,20 +332,22 @@ class NavigationEngineService : Service() {
                 startLocationUpdates()
             }
 
+            ACTION_SET_CENTER_ON_LOCATION_STATE -> {
+                val stateName = intent.getStringExtra(EXTRA_CENTER_ON_LOCATION_STATE)
+                val state = stateName?.let { CenterOnLocationState.valueOf(it) }
+                if (state != null) {
+                    setCenterOnLocationState(state)
+                }
+            }
+
             ACTION_STOP_SERVICE -> {
                 Log.i("NavEngineService", "Received ACTION_STOP_SERVICE. Shutting down.")
                 stopService()
                 return START_NOT_STICKY // Service will not be recreated.
             }
-            // Example: Handling when the service is restarted by the system
+
             else -> {
                 Log.w("NavigationService", "Received action: ${intent?.action} or service restart.")
-                // If the service is restarted by the system (e.g. START_STICKY)
-                // and you don't have a way to resume navigation state,
-                // it might be best to stop it to prevent running without purpose.
-                // However, this depends on your app's desired behavior for restarts.
-                // For now, let's assume if it's restarted without a clear "start" intent,
-                // and you don't have resume logic, it should stop.
                 if (flags and START_FLAG_REDELIVERY == 0 && intent?.action == null) {
                     Log.d("NavigationService", "Service likely restarted by system without specific intent, stopping.")
                     stopNavigationAndService()
@@ -355,6 +358,17 @@ class NavigationEngineService : Service() {
             }
         }
         return START_STICKY
+    }
+
+    private fun setCenterOnLocationState(state: CenterOnLocationState) {
+        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit()
+        prefs.putString(KEY_CENTER_ON_LOCATION_STATE, state.name)
+        prefs.apply()
+
+        when (state) {
+            CenterOnLocationState.RECORD -> gpxLogger.startGpxLogging()
+            else -> gpxLogger.stopGpxLogging()
+        }
     }
 
     private fun startNavigationLogic(routeResponse: ValhallaRouteResponse) {

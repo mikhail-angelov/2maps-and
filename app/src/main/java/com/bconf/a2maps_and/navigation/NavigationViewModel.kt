@@ -1,6 +1,7 @@
 package com.bconf.a2maps_and.navigation
 
 import android.app.Application
+import android.content.Context
 import android.content.Intent
 import android.location.Location
 import android.os.Build
@@ -14,13 +15,21 @@ import com.bconf.a2maps_and.routing.ValhallaRouteResponse
 import com.bconf.a2maps_and.utils.PlacemarkUtils
 import com.google.gson.Gson
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import org.maplibre.android.geometry.LatLng
+
+enum class CenterOnLocationState {
+    INACTIVE,
+    FOLLOW,
+    RECORD
+}
 
 class NavigationViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -29,6 +38,33 @@ class NavigationViewModel(application: Application) : AndroidViewModel(applicati
 
     private val _uiEvents = MutableSharedFlow<UiEvent>()
     val uiEvents = _uiEvents.asSharedFlow()
+
+    private val _centerOnLocationState = MutableStateFlow(CenterOnLocationState.INACTIVE)
+    val centerOnLocationState: StateFlow<CenterOnLocationState> = _centerOnLocationState.asStateFlow()
+
+    init {
+        val prefs = app.getSharedPreferences("NavigationEnginePrefs", Context.MODE_PRIVATE)
+        val savedStateName = prefs.getString("centerOnLocationState", CenterOnLocationState.INACTIVE.name)
+        _centerOnLocationState.value = CenterOnLocationState.valueOf(savedStateName ?: CenterOnLocationState.INACTIVE.name)
+    }
+
+    fun onCenterOnLocationFabClicked() {
+        val newState = when (_centerOnLocationState.value) {
+            CenterOnLocationState.INACTIVE -> CenterOnLocationState.FOLLOW
+            CenterOnLocationState.FOLLOW -> CenterOnLocationState.RECORD
+            CenterOnLocationState.RECORD -> CenterOnLocationState.INACTIVE
+        }
+        _centerOnLocationState.value = newState
+        setCenterOnLocationState(newState)
+    }
+
+    private fun setCenterOnLocationState(state: CenterOnLocationState) {
+        val intent = Intent(app, NavigationEngineService::class.java).apply {
+            action = NavigationEngineService.ACTION_SET_CENTER_ON_LOCATION_STATE
+            putExtra(NavigationEngineService.EXTRA_CENTER_ON_LOCATION_STATE, state.name)
+        }
+        app.startService(intent)
+    }
 
     sealed class UiEvent {
         data class ShowToast(val message: String, val isError: Boolean = false) : UiEvent()
@@ -94,7 +130,7 @@ class NavigationViewModel(application: Application) : AndroidViewModel(applicati
 
     fun requestNavigationTo(destinationLatLng: LatLng) {
         viewModelScope.launch {
-            var currentGpsLocation = lastKnownGpsLocation?.value
+            val currentGpsLocation = lastKnownGpsLocation.value
 
             if (currentGpsLocation == null) {
                 Log.d("NavigationViewModel", "Current GPS location is null. Waiting for a fix...")
