@@ -4,7 +4,6 @@ package com.bconf.a2maps_and.navigation
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
-import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
@@ -16,38 +15,36 @@ import android.os.IBinder
 import android.os.Looper
 import android.util.Log
 import androidx.core.app.NotificationCompat
-import com.bconf.a2maps_and.MainActivity
 import com.bconf.a2maps_and.R
 import com.bconf.a2maps_and.repository.RouteRepository
 import com.bconf.a2maps_and.routing.Maneuver
 import com.bconf.a2maps_and.routing.ValhallaLocation
 import com.bconf.a2maps_and.routing.ValhallaRouteResponse
-import com.google.gson.Gson
-import com.mapbox.geojson.Feature
 import com.google.android.gms.common.ConnectionResult
 import com.google.android.gms.common.GoogleApiAvailability
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
+import com.google.gson.Gson
 import com.huawei.hms.api.HuaweiApiAvailability
-import com.huawei.hms.location.FusedLocationProviderClient as HmsFusedLocationProviderClient
-import com.huawei.hms.location.LocationCallback as HmsLocationCallback
+import com.mapbox.geojson.Feature
 import com.mapbox.geojson.LineString
 import com.mapbox.geojson.Point
 import com.mapbox.geojson.utils.PolylineUtils
 import com.mapbox.turf.TurfConstants
-import com.mapbox.turf.TurfMisc
 import com.mapbox.turf.TurfMeasurement
+import com.mapbox.turf.TurfMisc
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.maplibre.android.geometry.LatLng
+import com.huawei.hms.location.FusedLocationProviderClient as HmsFusedLocationProviderClient
+import com.huawei.hms.location.LocationCallback as HmsLocationCallback
 
 class NavigationEngineService : Service() {
 
@@ -59,6 +56,7 @@ class NavigationEngineService : Service() {
         val speed: Float,
         val time: Long
     )
+
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private lateinit var locationCallback: LocationCallback
 
@@ -86,18 +84,19 @@ class NavigationEngineService : Service() {
     companion object {
         const val ACTION_START_NAVIGATION = "com.bconf.a2maps_and.action.START_NAVIGATION"
         const val ACTION_STOP_NAVIGATION = "com.bconf.a2maps_and.action.STOP_NAVIGATION"
-        const val ACTION_SET_CENTER_ON_LOCATION_STATE = "com.bconf.a2maps_and.action.SET_CENTER_ON_LOCATION_STATE"
+        const val ACTION_SET_CENTER_ON_LOCATION_STATE =
+            "com.bconf.a2maps_and.action.SET_CENTER_ON_LOCATION_STATE"
 
         const val ACTION_REROUTE_NAVIGATION =
             "com.bconf.a2maps_and.action.ACTION_REROUTE_NAVIGATION"
         const val ACTION_START_LOCATION_SERVICE = "ACTION_START_LOCATION_SERVICE"
         const val ACTION_STOP_SERVICE = "ACTION_STOP_SERVICE"
-        const val EXTRA_ROUTE_RESPONSE_JSON = "extra_route_response_json"
+        const val EXTRA_DESTINATION_LATLNG = "extra_destination_latlng"
         const val EXTRA_CENTER_ON_LOCATION_STATE = "extra_center_on_location_state"
-        private const val PREFS_NAME = "NavigationEnginePrefs"
+        const val PREFS_NAME = "NavigationEnginePrefs"
+        const val KEY_CENTER_ON_LOCATION_STATE = "centerOnLocationState"
         private const val KEY_SAVED_ROUTE_RESPONSE = "savedRouteResponse"
         private const val KEY_LAST_LOCATION = "last_location"
-        private const val KEY_CENTER_ON_LOCATION_STATE = "centerOnLocationState"
 
         private const val LOCATION_UPDATE_INTERVAL = 10000L
         private const val FASTEST_LOCATION_INTERVAL = 5000L
@@ -151,7 +150,10 @@ class NavigationEngineService : Service() {
         )
         val locationJson = Gson().toJson(serializableLocation)
         prefs.edit().putString(KEY_LAST_LOCATION, locationJson).apply()
-        Log.d("NavigationEngineService", "Saved last location: ${location.latitude}, ${location.longitude}")
+        Log.d(
+            "NavigationEngineService",
+            "Saved last location: ${location.latitude}, ${location.longitude}"
+        )
     }
 
     private fun restoreLastLocation() {
@@ -160,7 +162,8 @@ class NavigationEngineService : Service() {
         if (locationJson != null) {
             try {
                 // Deserialize to the data class first
-                val serializableLocation = Gson().fromJson(locationJson, SerializableLocation::class.java)
+                val serializableLocation =
+                    Gson().fromJson(locationJson, SerializableLocation::class.java)
 
                 // Reconstruct the Android Location object
                 val location = Location(LocationManager.GPS_PROVIDER).apply {
@@ -173,7 +176,10 @@ class NavigationEngineService : Service() {
                 }
 
                 _lastLocation.value = location
-                Log.d("NavigationEngineService", "Restored last location: ${location.latitude}, ${location.longitude}")
+                Log.d(
+                    "NavigationEngineService",
+                    "Restored last location: ${location.latitude}, ${location.longitude}"
+                )
             } catch (e: Exception) {
                 Log.e("NavigationEngineService", "Failed to restore last location", e)
             }
@@ -182,7 +188,6 @@ class NavigationEngineService : Service() {
             Log.d("NavigationEngineService", "No saved location found to restore.")
         }
     }
-
 
 
     private fun checkGMS(): Boolean {
@@ -294,28 +299,14 @@ class NavigationEngineService : Service() {
 
         when (intent?.action) {
             ACTION_START_NAVIGATION -> {
-                Log.d("NavigationService", "Starting navigation...")
+                Log.d("NavigationEngineService", "Starting navigation...")
                 rerouteCount = 5
-                try {
-                    val routeJson = intent.getStringExtra(EXTRA_ROUTE_RESPONSE_JSON)
-                    if (routeJson != null) {
-                        val routeResponse =
-                            Gson().fromJson(routeJson, ValhallaRouteResponse::class.java)
-                        clearSavedNavigationState()
-                        startForegroundServiceWithNotification()
-                        saveNavigationState(routeResponse)
-                        startNavigationLogic(routeResponse)
-
-                    } else {
-                        Log.e("NavigationEngineService", "Route JSON was null for START_NAVIGATION")
-                        _navigationState.value = NavigationState.ROUTE_CALCULATION_FAILED
-                        clearSavedNavigationState()
-                    }
-                } catch (e: Exception) {
-                    Log.e("NavigationEngineService", "Error parsing route for navigation", e)
-                    _navigationState.value = NavigationState.ROUTE_CALCULATION_FAILED
-                    clearSavedNavigationState()
-                    stopSelf()
+                val destinationJson = intent.getStringExtra(EXTRA_DESTINATION_LATLNG)
+                if (destinationJson != null) {
+                    val destinationLatLng = Gson().fromJson(destinationJson, LatLng::class.java)
+                    handleStartNavigationWithRouteFetch(destinationLatLng)
+                } else {
+                    Log.w("NavigationEngineService", "Destination LatLng not provided.")
                 }
             }
 
@@ -349,10 +340,16 @@ class NavigationEngineService : Service() {
             else -> {
                 Log.w("NavigationService", "Received action: ${intent?.action} or service restart.")
                 if (flags and START_FLAG_REDELIVERY == 0 && intent?.action == null) {
-                    Log.d("NavigationService", "Service likely restarted by system without specific intent, stopping.")
+                    Log.d(
+                        "NavigationService",
+                        "Service likely restarted by system without specific intent, stopping."
+                    )
                     stopNavigationAndService()
                 } else if (intent?.action == null) {
-                    Log.d("NavigationService", "Service started with null action, stopping to be safe.")
+                    Log.d(
+                        "NavigationService",
+                        "Service started with null action, stopping to be safe."
+                    )
                     stopNavigationAndService()
                 }
             }
@@ -368,6 +365,48 @@ class NavigationEngineService : Service() {
         when (state) {
             CenterOnLocationState.RECORD -> gpxLogger.startGpxLogging()
             else -> gpxLogger.stopGpxLogging()
+        }
+    }
+
+    private fun handleStartNavigationWithRouteFetch(destinationLatLng: LatLng) {
+        serviceScope.launch {
+            // Get the last known location from the service's own flow
+            val currentGpsLocation = lastLocation.value
+
+            if (currentGpsLocation.latitude == 0.0 && currentGpsLocation.longitude == 0.0) {
+                Log.w("NavigationEngineService", "Cannot fetch route, GPS location is not available yet.")
+                // Optional: Send a failure event back to the UI via a SharedFlow
+                // For now, we just log and do nothing.
+                return@launch
+            }
+
+            val fromLatLng = LatLng(currentGpsLocation.latitude, currentGpsLocation.longitude)
+
+            Log.d("NavigationEngineService", "Service is fetching route from $fromLatLng to $destinationLatLng")
+            val result = routeRepository.getRoute(
+                ValhallaLocation(fromLatLng.latitude, fromLatLng.longitude),
+                ValhallaLocation(destinationLatLng.latitude, destinationLatLng.longitude)
+            )
+
+            result.fold(
+                onSuccess = { routeResponse ->
+                    if (routeResponse.trip?.legs?.isNotEmpty() == true) {
+                        Log.i("NavigationEngineService", "Route received, proceeding to start navigation.")
+                        // We now have the route, so we can start the actual navigation engine
+                        startNavigationLogic(routeResponse) // Call the internal method
+                    } else {
+                        Log.w(
+                            "NavigationEngineService",
+                            "No route legs in response: ${routeResponse.trip?.status_message}"
+                        )
+                        // Optional: Send failure event back to UI
+                    }
+                },
+                onFailure = { exception ->
+                    Log.e("NavigationEngineService", "Route request failed in service: ${exception.message}")
+                    // Optional: Send failure event back to UI
+                }
+            )
         }
     }
 
@@ -532,6 +571,7 @@ class NavigationEngineService : Service() {
             return 0.0
         }
     }
+
     private fun getPathBearing(path: List<LatLng>): Float? {
         if (path.size > 1) {
             val firstPointInPath = path[0]
@@ -809,6 +849,7 @@ class NavigationEngineService : Service() {
             manager.createNotificationChannel(serviceChannel)
         }
     }
+
     private fun saveNavigationState(routeResponse: ValhallaRouteResponse) {
         val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit()
         val routeJson = Gson().toJson(routeResponse)
@@ -835,10 +876,16 @@ class NavigationEngineService : Service() {
 
             startNavigationLogic(restoredRouteResponse)
             startForegroundServiceWithNotification()
-            Log.i("NavigationEngineService", "Navigation state restored. Current state: ${_navigationState.value}")
+            Log.i(
+                "NavigationEngineService",
+                "Navigation state restored. Current state: ${_navigationState.value}"
+            )
 
         } else {
-            Log.d("NavigationEngineService", "No saved route shape found or was not navigating, not restoring.")
+            Log.d(
+                "NavigationEngineService",
+                "No saved route shape found or was not navigating, not restoring."
+            )
         }
     }
 
@@ -873,6 +920,7 @@ class NavigationEngineService : Service() {
 
         Log.d("NavigationService", "navigation definitively stopped.")
     }
+
     private fun stopService() {
         Log.i("NavEngineService", "stopService called. Cleaning up...")
         stopNavigationAndService()

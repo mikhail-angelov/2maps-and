@@ -4,14 +4,10 @@ import android.app.Application
 import android.content.Context
 import android.content.Intent
 import android.location.Location
-import android.os.Build
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.bconf.a2maps_and.R
-import com.bconf.a2maps_and.repository.RouteRepository
-import com.bconf.a2maps_and.routing.ValhallaLocation
-import com.bconf.a2maps_and.routing.ValhallaRouteResponse
 import com.bconf.a2maps_and.utils.PlacemarkUtils
 import com.google.gson.Gson
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -34,18 +30,23 @@ enum class CenterOnLocationState {
 class NavigationViewModel(application: Application) : AndroidViewModel(application) {
 
     private val app = application
-    private val routeRepository = RouteRepository()
 
     private val _uiEvents = MutableSharedFlow<UiEvent>()
     val uiEvents = _uiEvents.asSharedFlow()
 
     private val _centerOnLocationState = MutableStateFlow(CenterOnLocationState.INACTIVE)
-    val centerOnLocationState: StateFlow<CenterOnLocationState> = _centerOnLocationState.asStateFlow()
+    val centerOnLocationState: StateFlow<CenterOnLocationState> =
+        _centerOnLocationState.asStateFlow()
 
     init {
-        val prefs = app.getSharedPreferences("NavigationEnginePrefs", Context.MODE_PRIVATE)
-        val savedStateName = prefs.getString("centerOnLocationState", CenterOnLocationState.INACTIVE.name)
-        _centerOnLocationState.value = CenterOnLocationState.valueOf(savedStateName ?: CenterOnLocationState.INACTIVE.name)
+        val prefs =
+            app.getSharedPreferences(NavigationEngineService.PREFS_NAME, Context.MODE_PRIVATE)
+        val savedStateName = prefs.getString(
+            NavigationEngineService.KEY_CENTER_ON_LOCATION_STATE,
+            CenterOnLocationState.INACTIVE.name
+        )
+        _centerOnLocationState.value =
+            CenterOnLocationState.valueOf(savedStateName ?: CenterOnLocationState.INACTIVE.name)
     }
 
     fun onCenterOnLocationFabClicked() {
@@ -125,15 +126,16 @@ class NavigationViewModel(application: Application) : AndroidViewModel(applicati
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
 
-    // Helper function for formatting distance in ViewModel (can be shared or localized)
-
 
     fun requestNavigationTo(destinationLatLng: LatLng) {
         viewModelScope.launch {
             val currentGpsLocation = lastKnownGpsLocation.value
 
             if (currentGpsLocation == null) {
-                Log.d("NavigationViewModel", "Current GPS location is null. Waiting for a fix...")
+                Log.d(
+                    "NavigationViewModel",
+                    "Current GPS location is null. Cannot start navigation."
+                )
                 _uiEvents.emit(
                     UiEvent.ShowToast(
                         app.getString(R.string.error_gps_timeout),
@@ -143,67 +145,21 @@ class NavigationViewModel(application: Application) : AndroidViewModel(applicati
                 return@launch
             }
 
-            // At this point, currentGpsLocation should be non-null
-            val fromLatLng = LatLng(currentGpsLocation.latitude, currentGpsLocation.longitude)
-
             Log.d(
                 "NavigationViewModel",
-                "Requesting route from ${fromLatLng} to ${destinationLatLng}"
+                "Requesting service to start navigation to $destinationLatLng"
             )
-            val result = routeRepository.getRoute(
-                ValhallaLocation(fromLatLng.latitude, fromLatLng.longitude),
-                ValhallaLocation(destinationLatLng.latitude, destinationLatLng.longitude)
-            )
-
-            result.fold(
-                onSuccess = { routeResponse ->
-                    if (routeResponse.trip?.legs?.isNotEmpty() == true) {
-                        Log.i("NavigationViewModel", "Route received, starting navigation service.")
-                        startLocationServiceWithRoute(routeResponse, fromLatLng, destinationLatLng)
-                    } else {
-                        Log.w(
-                            "NavigationViewModel",
-                            "No route legs in response: ${routeResponse.trip?.status_message}"
-                        )
-                        _uiEvents.emit(
-                            UiEvent.ShowToast(
-                                app.getString(R.string.error_no_route_found),
-                                isError = true
-                            )
-                        )
-                    }
-                },
-                onFailure = { exception ->
-                    Log.e("NavigationViewModel", "Route request failed: ${exception.message}")
-                    _uiEvents.emit(
-                        UiEvent.ShowToast(
-                            app.getString(R.string.error_route_request_failed),
-                            isError = true
-                        )
-                    )
-
-                }
-            )
-        }
-    }
-
-    private fun startLocationServiceWithRoute(
-        routeResponse: ValhallaRouteResponse,
-        fromPoint: LatLng,
-        toPoint: LatLng
-    ) {
-        val intent = Intent(app, NavigationEngineService::class.java).apply {
-            action = NavigationEngineService.ACTION_START_NAVIGATION
-            putExtra(
-                NavigationEngineService.EXTRA_ROUTE_RESPONSE_JSON,
-                Gson().toJson(routeResponse)
-            )
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            app.startForegroundService(intent)
-        } else {
+            val intent = Intent(app, NavigationEngineService::class.java).apply {
+                action = NavigationEngineService.ACTION_START_NAVIGATION
+                // We need to pass the LatLng object. The easiest way is to serialize it.
+                putExtra(
+                    NavigationEngineService.EXTRA_DESTINATION_LATLNG,
+                    Gson().toJson(destinationLatLng)
+                )
+            }
             app.startService(intent)
         }
+
     }
 
     fun recalculateRoute() {

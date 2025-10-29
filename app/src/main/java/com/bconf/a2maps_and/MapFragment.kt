@@ -314,11 +314,20 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         )
     }
 
-    private fun updateCurrentLocationIndicatorAndCamera(location: Location, force: Boolean = false) {
-        mapsLayerManager.updateCurrentLocation(Point.fromLngLat(location.longitude, location.latitude))
+    private fun updateCurrentLocationIndicatorAndCamera(
+        location: Location,
+        force: Boolean = false
+    ) {
+        mapsLayerManager.updateCurrentLocation(
+            Point.fromLngLat(
+                location.longitude,
+                location.latitude
+            )
+        )
 
         val state = navigationViewModel.centerOnLocationState.value
-        val shouldFollow = state == CenterOnLocationState.FOLLOW || state == CenterOnLocationState.RECORD
+        val shouldFollow =
+            state == CenterOnLocationState.FOLLOW || state == CenterOnLocationState.RECORD
         if (force || (shouldFollow && !isUserPanning)) {
             val lat = if (location.latitude == 0.0) 56.292374 else location.latitude
             val lng = if (location.longitude == 0.0) 43.985402 else location.longitude
@@ -348,10 +357,12 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
                 fabCenterOnLocation?.setImageResource(R.drawable.ic_my_location)
                 fabCenterOnLocation?.backgroundTintList = ColorStateList.valueOf(Color.WHITE)
             }
+
             CenterOnLocationState.FOLLOW -> {
                 fabCenterOnLocation?.setImageResource(R.drawable.ic_navigation)
                 fabCenterOnLocation?.backgroundTintList = ColorStateList.valueOf(Color.GREEN)
             }
+
             CenterOnLocationState.RECORD -> {
                 fabCenterOnLocation?.setImageResource(R.drawable.ic_record)
                 fabCenterOnLocation?.backgroundTintList = ColorStateList.valueOf(Color.RED)
@@ -466,6 +477,7 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
             menu.add(0, ID_MENU_ADD_PLACEMARK, 0, "Add Placemark")
         }
     }
+
     override fun onContextItemSelected(item: MenuItem): Boolean {
         longPressedLatLng?.let { coords ->
             val coordinateText = "Lat: %.4f, Lng: %.4f".format(coords.latitude, coords.longitude)
