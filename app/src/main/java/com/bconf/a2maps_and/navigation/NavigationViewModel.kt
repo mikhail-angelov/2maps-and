@@ -86,6 +86,9 @@ class NavigationViewModel(application: Application) : AndroidViewModel(applicati
     val currentDisplayedPath: StateFlow<List<LatLng>> = NavigationEngineService.currentDisplayedPath
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    val recordedPath: StateFlow<List<LatLng>> = NavigationEngineService.recordedPath
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     // Observe the new ActiveManeuverDetails from the service
     val activeManeuverDetails: StateFlow<ActiveManeuverDetails?> =
         NavigationEngineService.activeManeuverDetails

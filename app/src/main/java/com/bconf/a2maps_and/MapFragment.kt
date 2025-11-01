@@ -11,6 +11,7 @@ import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageButton
+import android.widget.PopupMenu
 import android.widget.TextView
 import android.widget.Toast
 import androidx.fragment.app.Fragment
@@ -21,6 +22,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
 import androidx.navigation.fragment.navArgs
 import com.bconf.a2maps_and.maps.MapsLayerManager
+import com.bconf.a2maps_and.maps.MapsViewModel
 import com.bconf.a2maps_and.navigation.CenterOnLocationState
 import com.bconf.a2maps_and.navigation.NavigationState
 import com.bconf.a2maps_and.navigation.NavigationViewModel
@@ -45,6 +47,7 @@ import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.OnMapReadyCallback
 import org.maplibre.geojson.Point
+import java.io.File
 
 class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.OnMapClickListener,
     OnMapReadyCallback {
@@ -58,6 +61,7 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
     private val navigationViewModel: NavigationViewModel by activityViewModels()
     private val placemarkViewModel: PlacemarksViewModel by activityViewModels()
     private val trackViewModel: TrackViewModel by activityViewModels()
+    private val mapsViewModel: MapsViewModel by activityViewModels()
 
     private var longPressedLatLng: LatLng? = null
     private val ID_MENU_NAVIGATE = 1
@@ -108,7 +112,19 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         mainMenuButton = view.findViewById(R.id.mainMenuButton)
 
         mainMenuButton?.setOnClickListener {
-            findNavController().navigate(R.id.action_mapFragment_to_mainMenuFragment)
+            val popupMenu = PopupMenu(context, it)
+            popupMenu.menu.add("Menu").setOnMenuItemClickListener {
+                findNavController().navigate(R.id.action_mapFragment_to_mainMenuFragment)
+                true
+            }
+
+            mapsViewModel.maps.value?.forEach { mapFile ->
+                popupMenu.menu.add(mapFile.nameWithoutExtension).setOnMenuItemClickListener {
+                    mapsLayerManager.loadMapStyleFromFile(mapFile, null)
+                    true
+                }
+            }
+            popupMenu.show()
         }
 
         rerouteButton?.setOnClickListener {
@@ -139,12 +155,18 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         return view
     }
 
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
+        val mapsDir = File(requireContext().filesDir, "maps")
+        if (!mapsDir.exists()) {
+            mapsDir.mkdirs()
+        }
+        mapsViewModel.loadMaps(mapsDir)
+    }
+
     override fun onMapReady(mapLibreMap: MapLibreMap) {
         this.map = mapLibreMap
 
-        map.addOnCameraIdleListener {
-            // isUserPanning = false // We want to disable snap back until fab is clicked
-        }
         map.addOnCameraMoveStartedListener { reason ->
             if (reason == MapLibreMap.OnCameraMoveStartedListener.REASON_API_GESTURE) {
                 isUserPanning = true
@@ -328,6 +350,9 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         val state = navigationViewModel.centerOnLocationState.value
         val shouldFollow =
             state == CenterOnLocationState.FOLLOW || state == CenterOnLocationState.RECORD
+        if(isUserPanning && (System.currentTimeMillis() - lastUserInteractionTime > USER_INTERACTION_TIMEOUT_MS)) {
+            isUserPanning= false
+        }
         if (force || (shouldFollow && !isUserPanning)) {
             val lat = if (location.latitude == 0.0) 56.292374 else location.latitude
             val lng = if (location.longitude == 0.0) 43.985402 else location.longitude
@@ -340,6 +365,9 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
             if (state == CenterOnLocationState.FOLLOW || state == CenterOnLocationState.RECORD) {
                 cameraBuilder.tilt(0.0)
                 cameraBuilder.bearing(0.0)
+            }
+            if (state == CenterOnLocationState.RECORD) {
+                trackViewModel.setTrackPoints(navigationViewModel.recordedPath.value)
             }
 
             map.animateCamera(CameraUpdateFactory.newCameraPosition(cameraBuilder.build()), 600)

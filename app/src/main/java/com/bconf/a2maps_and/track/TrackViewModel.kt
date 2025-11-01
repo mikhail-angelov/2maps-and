@@ -101,6 +101,10 @@ class TrackViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun setTrackPoints(points: List<LatLng>) {
+        _trackPoints.value = points
+    }
+
     fun clearTrack(){
         _trackPoints.value = emptyList()
     }

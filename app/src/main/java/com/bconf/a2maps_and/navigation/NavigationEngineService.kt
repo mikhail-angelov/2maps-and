@@ -104,6 +104,11 @@ class NavigationEngineService : Service() {
         private val _currentDisplayedPath = MutableStateFlow<List<LatLng>>(emptyList())
         val currentDisplayedPath: StateFlow<List<LatLng>> = _currentDisplayedPath.asStateFlow()
 
+        private val _recordedPath = MutableStateFlow<List<LatLng>>(emptyList())
+        val recordedPath: StateFlow<List<LatLng>> = _recordedPath.asStateFlow()
+
+        private val state = MutableStateFlow<CenterOnLocationState>(CenterOnLocationState.INACTIVE)
+
         private val _activeManeuverDetails = MutableStateFlow<ActiveManeuverDetails?>(null)
         val activeManeuverDetails: StateFlow<ActiveManeuverDetails?> =
             _activeManeuverDetails.asStateFlow()
@@ -361,9 +366,14 @@ class NavigationEngineService : Service() {
         val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit()
         prefs.putString(KEY_CENTER_ON_LOCATION_STATE, state.name)
         prefs.apply()
+        _recordedPath.value = emptyList()
+        NavigationEngineService.state.value = state
 
         when (state) {
-            CenterOnLocationState.RECORD -> gpxLogger.startGpxLogging()
+            CenterOnLocationState.RECORD -> {
+                gpxLogger.startGpxLogging()
+
+            }
             else -> gpxLogger.stopGpxLogging()
         }
     }
@@ -592,6 +602,9 @@ class NavigationEngineService : Service() {
         }
         if (navigationState.value != NavigationState.IDLE) {
             gpxLogger.appendGpxTrackPoint(location)
+        }
+        if (state.value == CenterOnLocationState.RECORD) {
+            _recordedPath.value = _recordedPath.value  + LatLng(location.latitude, location.longitude)
         }
 
         _lastLocation.value = location

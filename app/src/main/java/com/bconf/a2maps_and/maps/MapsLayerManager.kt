@@ -62,7 +62,7 @@ class MapsLayerManager(private val context: Context, private val map: MapLibreMa
             }
 
 
-    private fun loadMapStyleFromFile(file: File, onStyleLoaded: ((style: Style) -> Unit)?) {
+    fun loadMapStyleFromFile(file: File, onStyleLoaded: ((style: Style) -> Unit)?) {
 
         val format = try {
             val db =
