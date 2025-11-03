@@ -120,7 +120,10 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
 
             mapsViewModel.maps.value?.forEach { mapFile ->
                 popupMenu.menu.add(mapFile.nameWithoutExtension).setOnMenuItemClickListener {
-                    mapsLayerManager.loadMapStyleFromFile(mapFile, null)
+                    mapsLayerManager.loadMapStyleFromFile(mapFile, { style ->
+                        placemarkLayerManager.onStyleLoaded(style)
+                        gasLayerManager.onStyleLoaded(style)
+                    })
                     true
                 }
             }
@@ -192,31 +195,31 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         mapView.let { registerForContextMenu(it) }
 
         mapsLayerManager = MapsLayerManager(requireContext(), map)
-        mapsLayerManager.loadInitialMapStyle({ style ->
-
-            placemarkLayerManager = PlacemarkLayerManager(
-                requireContext(), map,
-                placemarkViewModel,
-                viewLifecycleOwner.lifecycle,
-                onPlacemarkClickListener = { placemarkId ->
-                    val modal = PlacemarkModal.newInstance(placemarkId)
-                    modal.show(childFragmentManager, "PlacemarkViewModal")
-                }
-            )
-            placemarkLayerManager.onStyleLoaded(style)
-            gasLayerManager = GasLayerManager(
-                requireContext(),
-                map,
-                placemarkViewModel,
-                viewLifecycleOwner.lifecycle
-            ) { _ ->
-                mapView.showContextMenu()
+        placemarkLayerManager = PlacemarkLayerManager(
+            requireContext(), map,
+            placemarkViewModel,
+            viewLifecycleOwner.lifecycle,
+            onPlacemarkClickListener = { placemarkId ->
+                val modal = PlacemarkModal.newInstance(placemarkId)
+                modal.show(childFragmentManager, "PlacemarkViewModal")
             }
+        )
+        gasLayerManager = GasLayerManager(
+            requireContext(),
+            map,
+            placemarkViewModel,
+            viewLifecycleOwner.lifecycle
+        ) { _ ->
+            mapView.showContextMenu()
+        }
+        trackLayerManager = TrackLayerManager(
+            requireContext(), map, trackViewModel,
+            viewLifecycleOwner.lifecycle,
+        )
+        mapsLayerManager.loadInitialMapStyle({ style ->
+            placemarkLayerManager.onStyleLoaded(style)
             gasLayerManager.onStyleLoaded(style)
-            trackLayerManager = TrackLayerManager(
-                requireContext(), map, trackViewModel,
-                viewLifecycleOwner.lifecycle,
-            )
+
 
             if (initialPlacemarkLat != 999.0F && initialPlacemarkLng != 999.0F) {
                 isLocationLoaded = true
@@ -230,36 +233,9 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
                     CameraUpdateFactory.newCameraPosition(cameraPosition),
                     1000
                 )
-            } else {
-                navigationViewModel.lastKnownGpsLocation.value?.let { location ->
-                    val lat = if (location.latitude == 0.0) 56.292374 else location.latitude
-                    val lng = if (location.longitude == 0.0) 43.985402 else location.longitude
-
-                    map.cameraPosition = CameraPosition.Builder()
-                        .target(LatLng(lat, lng))
-                        .zoom(13.0)
-                        .tilt(0.0)
-                        .build()
-                }
             }
         })
 
-        navigationViewModel.lastKnownGpsLocation.value?.let { location ->
-            if (initialPlacemarkLat != 999.0F && initialPlacemarkLng != 999.0F) {
-                initialPlacemarkLat = 999.0F
-                initialPlacemarkLng = 999.0F
-                return@let
-            }
-            val lat = if (location.latitude == 0.0) 56.292374 else location.latitude
-            val lng = if (location.longitude == 0.0) 43.985402 else location.longitude
-            val currentLatLng = LatLng(lat, lng)
-            val cameraBuilder = CameraPosition.Builder().target(currentLatLng)
-                .zoom(map.cameraPosition.zoom.coerceAtLeast(13.0))
-                .padding(0.0, 0.0, 0.0, 0.0)
-                .tilt(0.0)
-
-            map.animateCamera(CameraUpdateFactory.newCameraPosition(cameraBuilder.build()), 600)
-        }
         navigationViewModel.uiEvents
             .flowWithLifecycle(
                 viewLifecycleOwner.lifecycle,
@@ -313,7 +289,7 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         viewLifecycleOwner.lifecycleScope.launch {
             trackViewModel.trackPoints.collectLatest { points ->
                 fabHideTrack?.visibility = if (points.isNotEmpty()) View.VISIBLE else View.GONE
-                if(points.isNotEmpty()) zoomToRoute(points)
+                if (points.isNotEmpty()) zoomToRoute(points)
             }
         }
 
@@ -350,10 +326,11 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         val state = navigationViewModel.centerOnLocationState.value
         val shouldFollow =
             state == CenterOnLocationState.FOLLOW || state == CenterOnLocationState.RECORD
-        if(isUserPanning && (System.currentTimeMillis() - lastUserInteractionTime > USER_INTERACTION_TIMEOUT_MS)) {
-            isUserPanning= false
+        if (isUserPanning && (System.currentTimeMillis() - lastUserInteractionTime > USER_INTERACTION_TIMEOUT_MS)) {
+            isUserPanning = false
         }
-        if (force || (shouldFollow && !isUserPanning)) {
+        if (force || (shouldFollow && !isUserPanning) || !isLocationLoaded) {
+            isLocationLoaded = true
             val lat = if (location.latitude == 0.0) 56.292374 else location.latitude
             val lng = if (location.longitude == 0.0) 43.985402 else location.longitude
             val currentLatLng = LatLng(lat, lng)
@@ -461,24 +438,8 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
     }
 
     override fun onMapClick(point: LatLng): Boolean {
-        val screenPoint = map.projection.toScreenLocation(point)
-        val features = map.queryRenderedFeatures(screenPoint, "placemarks")
-        if (features.isNotEmpty()) {
-            val feature = features[0]
-            val id = feature.getStringProperty("id")
-            val modal = PlacemarkModal.newInstance(id)
-            modal.show(childFragmentManager, "PlacemarkViewModal")
-            return true
-        }
-
-        val gasFeatures = map.queryRenderedFeatures(screenPoint, "gas_stations")
-        if (gasFeatures.isNotEmpty()) {
-            val feature = gasFeatures[0]
-            val id = feature.getStringProperty("id")
-            val modal = PlacemarkModal.newInstance(id)
-            modal.show(childFragmentManager, "PlacemarkViewModal")
-            return true
-        }
+        if (placemarkLayerManager.handleMapClick(point)) return true
+        if (gasLayerManager.handleMapClick(point)) return true
         return false
     }
 
