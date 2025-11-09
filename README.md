@@ -13,13 +13,26 @@ This is an advanced mapping and navigation application for Android, built with a
 
 **Interactive Map:**
   - Built using **MapLibre GL Native**, providing high-performance, hardware-accelerated map rendering.
-  - Offline OSM map is supported (preloaded Nizhegorodsky region only).
+  - Offline OSM map is supported.
   - Supports custom map styles loaded from assets, allowing for complete visual control (e.g., street, satellite, terrain views).
   - Smooth pan, zoom, and tilt gestures for intuitive map exploration.
 
 </td>
 </tr>
+<tr>
+<td width="180" valign="top">
+<img width="160" height="340" alt="2025-10-13_18-33-52" src="https://github.com/user-attachments/assets/fb8607fa-8c30-4eb5-810d-a9b1e05a8791" />
+<img width="160" height="340" alt="2025-10-13_18-33-52" src="https://github.com/user-attachments/assets/f9005611-c873-415b-a658-f928685175e7" />
+</td>
+<td valign="top">
 
+**Load custom Maps:**
+  - Allow to import ofline maps in (.mbtiles format)[https://docs.mapbox.com/help/glossary/mbtiles/] with raster or vector tilesets.
+  - There are many tools, wich could help you to get or generate mbtiles files, e.g. (https://github.com/systemed/tilemaker)[https://github.com/systemed/tilemaker].
+  - This is (one opesource util)[https://github.com/mikhail-angelov/2maps-loader], which help to download raster/vector tiles file for selected region/zoom, from web
+  - Supports easy switch between maps, right from main screen.
+</td>
+</tr>
 <tr>
 <td width="180" valign="top">
 <img width="160" height="340" alt="2025-10-13_18-35-02" src="https://github.com/user-attachments/assets/28872196-de4a-494d-b0b3-800dfc49680e" />
