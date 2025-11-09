@@ -27,9 +27,9 @@ This is an advanced mapping and navigation application for Android, built with a
 <td valign="top">
 
 **Load custom Maps:**
-  - Allow to import ofline maps in (.mbtiles format)[https://docs.mapbox.com/help/glossary/mbtiles/] with raster or vector tilesets.
-  - There are many tools, wich could help you to get or generate mbtiles files, e.g. (https://github.com/systemed/tilemaker)[https://github.com/systemed/tilemaker].
-  - This is (one opesource util)[https://github.com/mikhail-angelov/2maps-loader], which help to download raster/vector tiles file for selected region/zoom, from web
+  - Allow to import ofline maps in [https://docs.mapbox.com/help/glossary/mbtiles/](.mbtiles format) with raster or vector tilesets.
+  - There are many tools, wich could help you to get or generate mbtiles files, e.g. [https://github.com/systemed/tilemaker](https://github.com/systemed/tilemaker).
+  - This is [https://github.com/mikhail-angelov/2maps-loader](it's my util), which help to download raster/vector tiles file for selected region/zoom, from web
   - Supports easy switch between maps, right from main screen.
 </td>
 </tr>
@@ -40,8 +40,8 @@ This is an advanced mapping and navigation application for Android, built with a
 <td valign="top">
   
 **Turn-by-Turn Navigation:**
+  - **Online(unfortunately) navigation:** App process route request/response from [https://github.com/valhalla/valhalla](https://github.com/valhalla/valhalla) server.
   - **Custom Routing Engine:** Implements its own navigation logic, likely using an external routing service like Valhalla via Retrofit.
-  - **Real-time Guidance:** Displays maneuver instructions, remaining distance, and updates the route dynamically.
   - **Off-Route Detection & Rerouting:** Automatically detects when the user has deviated from the path and provides an option to recalculate the route.
   - **Route Visualization:** Draws the calculated navigation path clearly on the map.
 
