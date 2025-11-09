@@ -28,6 +28,17 @@ android {
         buildConfigField("String", "VALHALLA_BASE_URL", "\"${localProperties.getProperty('valhalla.baseUrl', '')}\"")
     }
 
+    signingConfigs {
+        release {
+            // Read signing configuration from environment variables
+            // provided by the GitHub Actions workflow.
+            storeFile file('release-keystore.keystore')
+            storePassword System.getenv("KEY_STORE_PASSWORD") ?: 'test'
+            keyAlias '2maps-and.bconf'
+            keyPassword System.getenv("SIGNING_KEY_PASSWORD") ?: 'test'
+        }
+    }
+
     buildFeatures {
         viewBinding true
         buildConfig true // Explicitly enable buildConfig
@@ -37,6 +48,7 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.release
         }
     }
     compileOptions {

@@ -104,7 +104,7 @@ class NavigationViewModel(application: Application) : AndroidViewModel(applicati
 
     // --- UI State derived from navigationState and currentManeuver ---
     val maneuverText: StateFlow<String> = activeManeuverDetails.map { details ->
-        if (details != null && details.maneuver != null &&
+        if (details != null &&
             (navigationState.value == NavigationState.NAVIGATING || navigationState.value == NavigationState.OFF_ROUTE)
         ) {
 

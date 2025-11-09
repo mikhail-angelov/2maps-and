@@ -2,9 +2,7 @@ package com.bconf.a2maps_and.maps
 
 import android.app.Activity
 import android.content.Intent
-import android.net.Uri
 import android.os.Bundle
-import android.provider.OpenableColumns
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -14,7 +12,6 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.bconf.a2maps_and.databinding.FragmentMapsBinding
 import java.io.File
-import java.io.FileOutputStream
 
 class MapsFragment : Fragment() {
 
@@ -22,47 +19,13 @@ class MapsFragment : Fragment() {
     private lateinit var mapsViewModel: MapsViewModel
     private lateinit var mapsAdapter: MapsAdapter
 
-    private val importMap = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+    private val importMapLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
             result.data?.data?.also { uri ->
-                val fileName = getFileName(uri)
-                val inputStream = requireContext().contentResolver.openInputStream(uri)
-                val mapsDir = File(requireContext().filesDir, "maps")
-                if (!mapsDir.exists()) {
-                    mapsDir.mkdirs()
-                }
-                val file = File(mapsDir, fileName)
-                val outputStream = FileOutputStream(file)
-                inputStream?.copyTo(outputStream)
-                mapsViewModel.loadMaps(mapsDir)
+                mapsViewModel.importMap(uri)
             }
         }
     }
-
-    private fun getFileName(uri: Uri): String {
-        var result: String? = null
-        if (uri.scheme == "content") {
-            val cursor = requireContext().contentResolver.query(uri, null, null, null, null)
-            try {
-                if (cursor != null && cursor.moveToFirst()) {
-                    result = cursor.getString(cursor.getColumnIndexOrThrow(OpenableColumns.DISPLAY_NAME))
-                }
-            } finally {
-                cursor?.close()
-            }
-        }
-        if (result == null) {
-            result = uri.path
-            val cut = result?.lastIndexOf('/')
-            if (cut != -1) {
-                if (cut != null) {
-                    result = result?.substring(cut + 1)
-                }
-            }
-        }
-        return result ?: "map.mbtiles"
-    }
-
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
@@ -75,24 +38,28 @@ class MapsFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-        mapsViewModel = ViewModelProvider(this).get(MapsViewModel::class.java)
+        // Use AndroidViewModelFactory to pass Application to ViewModel
+        val factory = ViewModelProvider.AndroidViewModelFactory.getInstance(requireActivity().application)
+        mapsViewModel = ViewModelProvider(this, factory).get(MapsViewModel::class.java)
 
-        mapsAdapter = MapsAdapter(emptyList(), requireContext())
+        // Initialize adapter with an empty list of MapItem
+        mapsAdapter = MapsAdapter(emptyList())
         binding.mapsRecyclerView.apply {
             layoutManager = LinearLayoutManager(context)
             adapter = mapsAdapter
         }
 
-        mapsViewModel.maps.observe(viewLifecycleOwner) { maps ->
-            mapsAdapter.updateMaps(maps)
+        // Observe the LiveData<List<MapItem>>
+        mapsViewModel.maps.observe(viewLifecycleOwner) { mapItems ->
+            mapsAdapter.updateMaps(mapItems)
         }
 
         binding.importMapFab.setOnClickListener {
             val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
                 addCategory(Intent.CATEGORY_OPENABLE)
-                type = "*/*"
+                type = "*/*" // Or be more specific e.g. "application/octet-stream" for .mbtiles
             }
-            importMap.launch(intent)
+            importMapLauncher.launch(intent)
         }
 
         val mapsDir = File(requireContext().filesDir, "maps")

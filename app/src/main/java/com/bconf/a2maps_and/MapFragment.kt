@@ -11,7 +11,7 @@ import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageButton
-import android.widget.PopupMenu
+import android.widget.PopupWindow
 import android.widget.TextView
 import android.widget.Toast
 import androidx.fragment.app.Fragment
@@ -21,8 +21,12 @@ import androidx.lifecycle.flowWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
 import androidx.navigation.fragment.navArgs
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
+import com.bconf.a2maps_and.maps.MapItem
 import com.bconf.a2maps_and.maps.MapsLayerManager
 import com.bconf.a2maps_and.maps.MapsViewModel
+import com.bconf.a2maps_and.maps.PopupMapAdapter
 import com.bconf.a2maps_and.navigation.CenterOnLocationState
 import com.bconf.a2maps_and.navigation.NavigationState
 import com.bconf.a2maps_and.navigation.NavigationViewModel
@@ -111,24 +115,52 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         fabToggleGasLayer = view.findViewById(R.id.fabToggleGasLayer)
         mainMenuButton = view.findViewById(R.id.mainMenuButton)
 
-        mainMenuButton?.setOnClickListener {
-            val popupMenu = PopupMenu(context, it)
-            popupMenu.menu.add("Menu").setOnMenuItemClickListener {
-                findNavController().navigate(R.id.action_mapFragment_to_mainMenuFragment)
-                true
+        mainMenuButton?.setOnClickListener { anchorView ->
+            // Inflate the popup window layout
+            val popupView = LayoutInflater.from(context).inflate(R.layout.popup_window_layout, null)
+            val recyclerView = popupView.findViewById<RecyclerView>(R.id.popup_recycler_view)
+
+            // Create the list of items for the popup
+            val popupItems = mutableListOf<MapItem>()
+
+            // Add the static "Menu" item first
+            val menuDummyFile = File("menu") // Create a dummy file for the MapItem
+            val menuMapItem = MapItem(menuDummyFile, "Menu", menuDummyFile)
+            popupItems.add(menuMapItem)
+
+            // Add all the map items from the view model
+            mapsViewModel.maps.value?.let { maps ->
+                popupItems.addAll(maps)
             }
 
-            mapsViewModel.maps.value?.forEach { mapFile ->
-                popupMenu.menu.add(mapFile.nameWithoutExtension).setOnMenuItemClickListener {
-                    mapsLayerManager.loadMapStyleFromFile(mapFile, { style ->
+            // Create and configure the PopupWindow
+            val popupWindow = PopupWindow(
+                popupView,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                true // Makes the popup focusable
+            )
+
+            // Set up the adapter and click listener
+            val adapter = PopupMapAdapter(popupItems) { selectedMapItem ->
+                if (selectedMapItem.name == "Menu") {
+                    findNavController().navigate(R.id.action_mapFragment_to_mainMenuFragment)
+                } else {
+                    mapsLayerManager.loadMapStyleFromFile(selectedMapItem.file) { style ->
                         placemarkLayerManager.onStyleLoaded(style)
                         gasLayerManager.onStyleLoaded(style)
-                    })
-                    true
+                    }
                 }
+                popupWindow.dismiss() // Dismiss the popup on click
             }
-            popupMenu.show()
+
+            recyclerView.layoutManager = LinearLayoutManager(context)
+            recyclerView.adapter = adapter
+
+            // Show the popup window anchored to the button
+            popupWindow.showAsDropDown(anchorView)
         }
+
 
         rerouteButton?.setOnClickListener {
             navigationViewModel.recalculateRoute()

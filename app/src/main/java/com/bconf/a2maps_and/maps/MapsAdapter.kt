@@ -1,19 +1,19 @@
 package com.bconf.a2maps_and.maps
 
 import android.content.Context
-import android.graphics.Color
+import android.graphics.BitmapFactory
 import android.view.LayoutInflater
 import android.view.ViewGroup
-import androidx.core.content.ContextCompat
 import androidx.navigation.findNavController
 import androidx.recyclerview.widget.RecyclerView
 import com.bconf.a2maps_and.R
-import com.bconf.a2maps_and.databinding.ItemMapBinding
-import java.io.File
+import com.bconf.a2maps_and.databinding.ItemMapBinding // Assumes ViewBinding is enabled and you have this file
 
-class MapsAdapter(private var maps: List<File>, private val context: Context) : RecyclerView.Adapter<MapsAdapter.MapViewHolder>() {
+class MapsAdapter(
+    private var mapItems: List<MapItem>
+) : RecyclerView.Adapter<MapsAdapter.MapViewHolder>() {
 
-    private var selectedPosition = RecyclerView.NO_POSITION
+    class MapViewHolder(val binding: ItemMapBinding) : RecyclerView.ViewHolder(binding.root)
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): MapViewHolder {
         val binding = ItemMapBinding.inflate(LayoutInflater.from(parent.context), parent, false)
@@ -21,44 +21,44 @@ class MapsAdapter(private var maps: List<File>, private val context: Context) : 
     }
 
     override fun onBindViewHolder(holder: MapViewHolder, position: Int) {
-        val position = holder.getAdapterPosition()
-        val map = maps[position]
-        holder.binding.mapName.text = map.name
+        val mapItem = mapItems[position]
+        holder.binding.mapNameText.text = mapItem.name
 
         val sharedPreferences = holder.itemView.context.getSharedPreferences("maps_prefs", Context.MODE_PRIVATE)
         val selectedMapPath = sharedPreferences.getString("selected_map", null)
 
-        if (selectedMapPath != null && selectedMapPath == map.absolutePath) {
-            selectedPosition = position
-        }
-
-        if (position == selectedPosition) {
-            holder.itemView.setBackgroundColor(ContextCompat.getColor(context, R.color.selected_item_color))
+        // Check if the preview image file exists and is a file
+        if (mapItem.previewImage.exists() && mapItem.previewImage.isFile) {
+            // Decode the file into a Bitmap
+            val bitmap = BitmapFactory.decodeFile(mapItem.previewImage.absolutePath)
+            if (bitmap != null) {
+                // Set the Bitmap to the ImageView
+                holder.binding.mapPreviewImage.setImageBitmap(bitmap)
+            } else {
+                // If decoding fails, fall back to the default icon
+                holder.binding.mapPreviewImage.setImageResource(R.drawable.ic_map)
+            }
         } else {
-            holder.itemView.setBackgroundColor(Color.TRANSPARENT)
+            // If the file does not exist, set the default icon
+            holder.binding.mapPreviewImage.setImageResource(R.drawable.ic_map)
         }
-
         holder.itemView.setOnClickListener {
-            if (selectedPosition != holder.adapterPosition) {
-                notifyItemChanged(selectedPosition)
-                selectedPosition = holder.adapterPosition
-                notifyItemChanged(selectedPosition)
+            if (position != holder.adapterPosition) {
+                notifyItemChanged(position)
             }
 
             with(sharedPreferences.edit()) {
-                putString("selected_map", map.absolutePath)
+                putString("selected_map", mapItem.file.absolutePath)
                 apply()
             }
             holder.itemView.findNavController().navigate(R.id.action_mapsFragment_to_mapFragment)
         }
     }
 
-    override fun getItemCount(): Int = maps.size
+    override fun getItemCount(): Int = mapItems.size
 
-    fun updateMaps(newMaps: List<File>) {
-        maps = newMaps
-        notifyDataSetChanged()
+    fun updateMaps(newMapItems: List<MapItem>) {
+        this.mapItems = newMapItems
+        notifyDataSetChanged() // For simplicity. Consider using DiffUtil for better performance.
     }
-
-    class MapViewHolder(val binding: ItemMapBinding) : RecyclerView.ViewHolder(binding.root)
 }

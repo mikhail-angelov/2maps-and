@@ -1,6 +1,5 @@
 *.iml
 .gradle
-/local.properties
 .idea
 .kotlin
 .DS_Store
@@ -8,4 +7,12 @@
 /captures
 .externalNativeBuild
 .cxx
+# Keystore files
+*.jks
+*.keystore
+info.txt
+
+# Local properties file (often contains sensitive data)
 local.properties
+
+/app/release/*

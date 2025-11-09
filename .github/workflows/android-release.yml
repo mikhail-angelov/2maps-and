@@ -10,6 +10,8 @@ jobs:
   build-and-release:
     name: Build, Sign, and Release APK
     runs-on: ubuntu-latest # Use the latest Ubuntu runner
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout code
@@ -24,26 +26,26 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3 # Sets up Gradle with caching for faster builds
 
-#      - name: Decode and write signing key
-#        id: decode_keystore
-#        # Reads the base64-encoded secret, decodes it, and writes it to a temporary file.
-#        # The file path is then exposed as an environment variable for subsequent steps.
-#        run: |
-#          KEYSTORE_FILE_PATH="${{ runner.temp }}/keystore.jks"
-#          echo "${{ secrets.SIGNING_KEY_BASE64 }}" | base64 --decode > "$KEYSTORE_FILE_PATH"
-#          echo "KEYSTORE_FILE=$KEYSTORE_FILE_PATH" >> $GITHUB_ENV
-#        env:
-#          SIGNING_KEY_BASE64: ${{ secrets.SIGNING_KEY_BASE64 }}
+      - name: Decode and write signing key
+        id: decode_keystore
+        # Reads the base64-encoded secret, decodes it, and writes it to a temporary file.
+        # The file path is then exposed as an environment variable for subsequent steps.
+        run: |
+          KEYSTORE_FILE_PATH="${{ runner.temp }}/keystore.jks"
+          echo "${{ secrets.SIGNING_KEY_BASE64 }}" | base64 --decode > "$KEYSTORE_FILE_PATH"
+          echo "KEYSTORE_FILE=$KEYSTORE_FILE_PATH" >> $GITHUB_ENV
+        env:
+          SIGNING_KEY_BASE64: ${{ secrets.SIGNING_KEY_BASE64 }}
 
       - name: Build and Sign Release APK
         # Runs the Gradle wrapper to assemble the release build.
         # Secrets are passed as environment variables, which should be configured in your build.gradle file.
         run: ./gradlew :app:assembleRelease
-#        env:
-#          SIGNING_KEY_FILE: ${{ env.KEYSTORE_FILE }}
-#          KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
-#          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-#          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+        env:
+          SIGNING_KEY_FILE: ${{ env.KEYSTORE_FILE }}
+          KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
 
       - name: Create GitHub Release
         id: create_release
