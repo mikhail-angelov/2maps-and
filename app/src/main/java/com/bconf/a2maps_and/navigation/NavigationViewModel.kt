@@ -49,10 +49,20 @@ class NavigationViewModel(application: Application) : AndroidViewModel(applicati
             CenterOnLocationState.valueOf(savedStateName ?: CenterOnLocationState.INACTIVE.name)
     }
 
-    fun onCenterOnLocationFabClicked() {
+
+    fun onCenterButtonClicked() {
+        val newState = when (_centerOnLocationState.value) {
+            CenterOnLocationState.INACTIVE -> CenterOnLocationState.INACTIVE
+            CenterOnLocationState.FOLLOW -> CenterOnLocationState.RECORD
+            CenterOnLocationState.RECORD -> CenterOnLocationState.FOLLOW
+        }
+        _centerOnLocationState.value = newState
+        setCenterOnLocationState(newState)
+    }
+    fun onCenterButtonLongClicked() {
         val newState = when (_centerOnLocationState.value) {
             CenterOnLocationState.INACTIVE -> CenterOnLocationState.FOLLOW
-            CenterOnLocationState.FOLLOW -> CenterOnLocationState.RECORD
+            CenterOnLocationState.FOLLOW -> CenterOnLocationState.INACTIVE
             CenterOnLocationState.RECORD -> CenterOnLocationState.INACTIVE
         }
         _centerOnLocationState.value = newState
@@ -63,6 +73,14 @@ class NavigationViewModel(application: Application) : AndroidViewModel(applicati
         val intent = Intent(app, NavigationEngineService::class.java).apply {
             action = NavigationEngineService.ACTION_SET_CENTER_ON_LOCATION_STATE
             putExtra(NavigationEngineService.EXTRA_CENTER_ON_LOCATION_STATE, state.name)
+        }
+        app.startService(intent)
+    }
+
+    fun setZoomLevel(zoom: Double) {
+        val intent = Intent(app, NavigationEngineService::class.java).apply {
+            action = NavigationEngineService.ACTION_SET_ZOOM_LEVEL
+            putExtra(NavigationEngineService.EXTRA_ZOOM_LEVEL, zoom)
         }
         app.startService(intent)
     }
@@ -101,6 +119,9 @@ class NavigationViewModel(application: Application) : AndroidViewModel(applicati
         NavigationEngineService.remainingDistanceInMeters.map { distance ->
             PlacemarkUtils.formatDistanceForDisplay(distance)
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "0.0 m")
+
+    val zoomLevel: StateFlow<Double> = NavigationEngineService.zoomLevel
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 15.0)
 
     // --- UI State derived from navigationState and currentManeuver ---
     val maneuverText: StateFlow<String> = activeManeuverDetails.map { details ->

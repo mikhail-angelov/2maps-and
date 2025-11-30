@@ -171,12 +171,14 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         }
         fabCenterOnLocation?.setOnClickListener {
             isUserPanning = false
+            navigationViewModel.onCenterButtonClicked()
             navigationViewModel.lastKnownGpsLocation.value?.let { location ->
                 updateCurrentLocationIndicatorAndCamera(location, true)
             }
         }
         fabCenterOnLocation?.setOnLongClickListener {
-            navigationViewModel.onCenterOnLocationFabClicked()
+            isUserPanning = false
+            navigationViewModel.onCenterButtonLongClicked()
             true
         }
         fabHideTrack?.setOnClickListener {
@@ -224,6 +226,12 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
 
             override fun onMoveEnd(detector: MoveGestureDetector) {}
         })
+        map.addOnCameraIdleListener {
+            val zoom = map.cameraPosition.zoom
+            if (navigationViewModel.zoomLevel.value != zoom) {
+                navigationViewModel.setZoomLevel(zoom)
+            }
+        }
         mapView.let { registerForContextMenu(it) }
 
         mapsLayerManager = MapsLayerManager(requireContext(), map)
@@ -251,7 +259,7 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         mapsLayerManager.loadInitialMapStyle({ style ->
             placemarkLayerManager.onStyleLoaded(style)
             gasLayerManager.onStyleLoaded(style)
-
+            trackLayerManager.setupTrackLayer(style)
 
             if (initialPlacemarkLat != 999.0F && initialPlacemarkLng != 999.0F) {
                 isLocationLoaded = true
@@ -320,14 +328,27 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         }
         viewLifecycleOwner.lifecycleScope.launch {
             trackViewModel.trackPoints.collectLatest { points ->
-                fabHideTrack?.visibility = if (points.isNotEmpty()) View.VISIBLE else View.GONE
-                if (points.isNotEmpty()) zoomToRoute(points)
+                val state = navigationViewModel.centerOnLocationState.value
+                val isTracking =
+                    state == CenterOnLocationState.RECORD || state == CenterOnLocationState.FOLLOW
+                fabHideTrack?.visibility =
+                    if (points.isNotEmpty() && !isTracking) View.VISIBLE else View.GONE
+                if (points.isNotEmpty() && !isTracking) zoomToRoute(points)
             }
         }
 
         viewLifecycleOwner.lifecycleScope.launch {
             navigationViewModel.centerOnLocationState.collectLatest { state ->
                 updateCenterOnLocationFab(state)
+            }
+        }
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            navigationViewModel.recordedPath.collectLatest { points ->
+                val state = navigationViewModel.centerOnLocationState.value
+                if (state == CenterOnLocationState.RECORD) {
+                    trackViewModel.setTrackPoints(points)
+                }
             }
         }
     }
@@ -362,21 +383,21 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
             isUserPanning = false
         }
         if (force || (shouldFollow && !isUserPanning) || !isLocationLoaded) {
+            var zoom = map.cameraPosition.zoom.coerceAtLeast(13.0)
+            if (!isLocationLoaded) {
+                zoom = navigationViewModel.zoomLevel.value
+            }
             isLocationLoaded = true
             val lat = if (location.latitude == 0.0) 56.292374 else location.latitude
             val lng = if (location.longitude == 0.0) 43.985402 else location.longitude
             val currentLatLng = LatLng(lat, lng)
-
             val cameraBuilder = CameraPosition.Builder().target(currentLatLng)
-                .zoom(map.cameraPosition.zoom.coerceAtLeast(13.0))
+                .zoom(zoom)
                 .padding(0.0, 0.0, 0.0, 0.0)
 
             if (state == CenterOnLocationState.FOLLOW || state == CenterOnLocationState.RECORD) {
                 cameraBuilder.tilt(0.0)
                 cameraBuilder.bearing(0.0)
-            }
-            if (state == CenterOnLocationState.RECORD) {
-                trackViewModel.setTrackPoints(navigationViewModel.recordedPath.value)
             }
 
             map.animateCamera(CameraUpdateFactory.newCameraPosition(cameraBuilder.build()), 600)
@@ -466,6 +487,7 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         super.onDestroyView()
         map.removeOnMapLongClickListener(this)
         map.removeOnMapClickListener(this)
+        isLocationLoaded = false
         if (::mapView.isInitialized) mapView.onDestroy()
     }
 

@@ -10,9 +10,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
-import org.maplibre.android.camera.CameraUpdateFactory
-import org.maplibre.android.geometry.LatLngBounds
+
 import org.maplibre.android.maps.MapLibreMap
+import org.maplibre.android.maps.Style
 import org.maplibre.android.style.layers.LineLayer
 import org.maplibre.android.style.layers.Property
 import org.maplibre.android.style.layers.PropertyFactory
@@ -31,27 +31,24 @@ class TrackLayerManager(
     private val layerId = "track-layer"
     private var layer: LineLayer? = null
 
-    init {
-        setupTrackLayer()
-    }
 
-    private fun setupTrackLayer() {
-        if (map.style?.isFullyLoaded == true) {
-            val source = GeoJsonSource(sourceId)
-            layer = LineLayer(layerId, sourceId).withProperties(
-                PropertyFactory.lineColor(ContextCompat.getColor(context, R.color.purple_500)),
-                PropertyFactory.lineWidth(4f),
-                PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
-                PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
-                PropertyFactory.visibility(Property.NONE)
-            )
-
-            map.style?.addSource(source)
-            map.style?.addLayer(layer!!)
-            observeTracks()
-        } else {
+    fun setupTrackLayer(style: Style) {
+        if (!style.isFullyLoaded) {
             Log.e("TrackLayerManager", "Map style is not loaded, cannot add track layer.")
+            return
         }
+        val source = GeoJsonSource(sourceId)
+        layer = LineLayer(layerId, sourceId).withProperties(
+            PropertyFactory.lineColor(ContextCompat.getColor(context, R.color.purple_500)),
+            PropertyFactory.lineWidth(4f),
+            PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
+            PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
+            PropertyFactory.visibility(Property.NONE)
+        )
+
+        style.addSource(source)
+        style.addLayer(layer!!)
+        observeTracks()
     }
 
     private fun observeTracks() {
@@ -69,38 +66,7 @@ class TrackLayerManager(
                         map.style?.getSourceAs<GeoJsonSource>(sourceId)?.setGeoJson(lineString)
                         // Make the layer visible
                         layer?.setProperties(PropertyFactory.visibility(Property.VISIBLE))
-                        //zoom to track
-                        if (trackPoints.size > 1) {
-                            val boundsBuilder = LatLngBounds.Builder()
-                            for (point in trackPoints) {
-                                boundsBuilder.include(point)
-                            }
-                            val bounds = boundsBuilder.build()
 
-                            // Calculate the distance span of the bounds
-                            val latSpan = bounds.latitudeSpan
-                            val lonSpan = bounds.longitudeSpan
-                            val zoomThreshold = 0.005 // Approx 500 meters. Adjust as needed.
-
-                            // If the bounds are very small, just center with a fixed zoom.
-                            if (latSpan < zoomThreshold && lonSpan < zoomThreshold) {
-                                map.animateCamera(
-                                    CameraUpdateFactory.newLatLngZoom(bounds.center, 17.0), 1500
-                                )
-                            } else {
-                                // Otherwise, animate camera to the calculated bounds with padding.
-                                map.animateCamera(
-                                    CameraUpdateFactory.newLatLngBounds(bounds, 100), 1500
-                                )
-                            }
-                        } else if (trackPoints.size == 1) {
-                            // If only one point, just center on it
-                            map.animateCamera(
-                                CameraUpdateFactory.newLatLngZoom(
-                                    trackPoints.first(), 15.0
-                                ), 1500
-                            )
-                        }
                     } else {
                         // Make the layer invisible
                         layer?.setProperties(PropertyFactory.visibility(Property.NONE))

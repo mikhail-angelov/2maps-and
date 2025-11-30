@@ -95,6 +95,9 @@ class NavigationEngineService : Service() {
         const val EXTRA_CENTER_ON_LOCATION_STATE = "extra_center_on_location_state"
         const val PREFS_NAME = "NavigationEnginePrefs"
         const val KEY_CENTER_ON_LOCATION_STATE = "centerOnLocationState"
+        const val KEY_ZOOM_LEVEL = "zoomLevel"
+        const val ACTION_SET_ZOOM_LEVEL = "com.bconf.a2maps_and.action.SET_ZOOM_LEVEL"
+        const val EXTRA_ZOOM_LEVEL = "extra_zoom_level"
         private const val KEY_SAVED_ROUTE_RESPONSE = "savedRouteResponse"
         private const val KEY_LAST_LOCATION = "last_location"
 
@@ -121,6 +124,9 @@ class NavigationEngineService : Service() {
 
         private val _remainingDistanceInMeters = MutableStateFlow(0.0)
         val remainingDistanceInMeters: StateFlow<Double> = _remainingDistanceInMeters.asStateFlow()
+
+        private val _zoomLevel = MutableStateFlow(15.0)
+        val zoomLevel: StateFlow<Double> = _zoomLevel.asStateFlow()
     }
 
     private val NOTIFICATION_ID = 101
@@ -141,6 +147,19 @@ class NavigationEngineService : Service() {
 
         restoreLastLocation()
         restoreNavigationStateIfNecessary()
+        restoreZoomLevel()
+    }
+
+    private fun saveZoomLevel(zoom: Double) {
+        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit().putFloat(KEY_ZOOM_LEVEL, zoom.toFloat()).apply()
+        _zoomLevel.value = zoom
+    }
+
+    private fun restoreZoomLevel() {
+        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val savedZoom = prefs.getFloat(KEY_ZOOM_LEVEL, 15.0f).toDouble()
+        _zoomLevel.value = savedZoom
     }
 
     private fun saveLastLocation(location: Location) {
@@ -333,6 +352,13 @@ class NavigationEngineService : Service() {
                 val state = stateName?.let { CenterOnLocationState.valueOf(it) }
                 if (state != null) {
                     setCenterOnLocationState(state)
+                }
+            }
+
+            ACTION_SET_ZOOM_LEVEL -> {
+                val zoom = intent.getDoubleExtra(EXTRA_ZOOM_LEVEL, -1.0)
+                if (zoom != -1.0) {
+                    saveZoomLevel(zoom)
                 }
             }
 
@@ -605,6 +631,7 @@ class NavigationEngineService : Service() {
         }
         if (state.value == CenterOnLocationState.RECORD) {
             _recordedPath.value = _recordedPath.value  + LatLng(location.latitude, location.longitude)
+            gpxLogger.appendGpxTrackPoint(location)
         }
 
         _lastLocation.value = location
