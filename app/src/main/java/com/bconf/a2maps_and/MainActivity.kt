@@ -18,6 +18,7 @@ import androidx.navigation.NavController
 import androidx.navigation.fragment.NavHostFragment
 import androidx.navigation.ui.AppBarConfiguration
 import androidx.navigation.ui.NavigationUI
+import com.bconf.a2maps_and.auth.AuthRepository
 import com.bconf.a2maps_and.navigation.NavigationEngineService
 import com.bconf.a2maps_and.navigation.NavigationState
 import com.bconf.a2maps_and.navigation.NavigationViewModel
@@ -35,6 +36,7 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         navigationViewModel = ViewModelProvider(this).get(NavigationViewModel::class.java)
+        AuthRepository.init(this)
         setContentView(R.layout.activity_main)
 
         // Find the Toolbar
