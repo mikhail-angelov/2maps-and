@@ -2,6 +2,7 @@ package com.bconf.a2maps_and
 
 import android.content.res.ColorStateList
 import android.graphics.Color
+import android.graphics.PorterDuff
 import android.location.Location
 import android.os.Bundle
 import android.util.Log
@@ -18,6 +19,7 @@ import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.flowWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
 import androidx.navigation.fragment.navArgs
@@ -39,8 +41,8 @@ import com.bconf.a2maps_and.track.TrackViewModel
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.launchIn
-import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.onEach
 import org.maplibre.android.MapLibre
 import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.camera.CameraUpdateFactory
@@ -187,6 +189,23 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
 
         fabToggleGasLayer?.setOnClickListener {
             placemarkViewModel.toggleGasLayerVisibility()
+        }
+
+        // Observe gas layer visibility and update button appearance
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                placemarkViewModel.isGasLayerVisible.collect { isVisible ->
+                    val tint = if (isVisible) {
+                        ColorStateList.valueOf(Color.parseColor("#9C27B0")) // purple
+                    } else {
+                        ColorStateList.valueOf(Color.parseColor("#757575")) // default grey
+                    }
+                    fabToggleGasLayer?.backgroundTintList = tint
+                    fabToggleGasLayer?.imageTintList = ColorStateList.valueOf(
+                        if (isVisible) Color.WHITE else Color.WHITE
+                    )
+                }
+            }
         }
 
         return view
