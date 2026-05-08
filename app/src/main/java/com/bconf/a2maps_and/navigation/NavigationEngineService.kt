@@ -398,7 +398,9 @@ class NavigationEngineService : Service() {
         when (state) {
             CenterOnLocationState.RECORD -> {
                 gpxLogger.startGpxLogging()
-
+            }
+            CenterOnLocationState.FOLLOW_AND_RECORD -> {
+                gpxLogger.startGpxLogging()
             }
             else -> gpxLogger.stopGpxLogging()
         }
@@ -629,7 +631,7 @@ class NavigationEngineService : Service() {
         if (navigationState.value != NavigationState.IDLE) {
             gpxLogger.appendGpxTrackPoint(location)
         }
-        if (state.value == CenterOnLocationState.RECORD) {
+        if (state.value == CenterOnLocationState.RECORD || state.value == CenterOnLocationState.FOLLOW_AND_RECORD) {
             _recordedPath.value = _recordedPath.value  + LatLng(location.latitude, location.longitude)
             gpxLogger.appendGpxTrackPoint(location)
         }

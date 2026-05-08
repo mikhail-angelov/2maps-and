@@ -10,6 +10,7 @@ import android.view.LayoutInflater
 import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
+import android.view.animation.AccelerateDecelerateInterpolator
 import android.widget.ImageButton
 import android.widget.PopupWindow
 import android.widget.TextView
@@ -30,6 +31,7 @@ import com.bconf.a2maps_and.maps.PopupMapAdapter
 import com.bconf.a2maps_and.navigation.CenterOnLocationState
 import com.bconf.a2maps_and.navigation.NavigationState
 import com.bconf.a2maps_and.navigation.NavigationViewModel
+import com.google.android.material.floatingactionbutton.FloatingActionButton
 import com.bconf.a2maps_and.placemark.GasLayerManager
 import com.bconf.a2maps_and.placemark.PlacemarkLayerManager
 import com.bconf.a2maps_and.placemark.PlacemarkModal
@@ -73,6 +75,11 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
     private var fabCenterOnLocation: FloatingActionButton? = null
     private var fabHideTrack: FloatingActionButton? = null
     private var fabToggleGasLayer: FloatingActionButton? = null
+    private var fabRadialFollow: FloatingActionButton? = null
+    private var fabRadialRecord: FloatingActionButton? = null
+    private var fabRadialFollowRecord: FloatingActionButton? = null
+    private var isRadialMenuOpen = false
+    private val radialMenuAnimDuration = 200L
     private var isUserPanning = false
     private var maneuverTextViewInFragment: TextView? = null
     private var navigationInfoPanel: View? = null
@@ -113,6 +120,9 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         fabCenterOnLocation = view.findViewById(R.id.fabCenterOnLocationInFragment)
         fabHideTrack = view.findViewById(R.id.fabHideTrack)
         fabToggleGasLayer = view.findViewById(R.id.fabToggleGasLayer)
+        fabRadialFollow = view.findViewById(R.id.fabRadialFollow)
+        fabRadialRecord = view.findViewById(R.id.fabRadialRecord)
+        fabRadialFollowRecord = view.findViewById(R.id.fabRadialFollowRecord)
         mainMenuButton = view.findViewById(R.id.mainMenuButton)
 
         mainMenuButton?.setOnClickListener { anchorView ->
@@ -171,15 +181,45 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         }
         fabCenterOnLocation?.setOnClickListener {
             isUserPanning = false
-            navigationViewModel.onCenterButtonClicked()
-            navigationViewModel.lastKnownGpsLocation.value?.let { location ->
-                updateCurrentLocationIndicatorAndCamera(location, true)
+            if (isRadialMenuOpen) {
+                closeRadialMenu()
+            } else if (navigationViewModel.centerOnLocationState.value != CenterOnLocationState.INACTIVE) {
+                navigationViewModel.onCenterButtonClicked()
             }
         }
         fabCenterOnLocation?.setOnLongClickListener {
             isUserPanning = false
-            navigationViewModel.onCenterButtonLongClicked()
+            if (!isRadialMenuOpen && navigationViewModel.centerOnLocationState.value == CenterOnLocationState.INACTIVE) {
+                openRadialMenu()
+            }
             true
+        }
+
+        // Radial menu item: Follow
+        fabRadialFollow?.setOnClickListener {
+            navigationViewModel.setCenterOnLocationStateFromMenu(CenterOnLocationState.FOLLOW)
+            navigationViewModel.lastKnownGpsLocation.value?.let { location ->
+                updateCurrentLocationIndicatorAndCamera(location, true)
+            }
+            closeRadialMenu()
+        }
+
+        // Radial menu item: Record
+        fabRadialRecord?.setOnClickListener {
+            navigationViewModel.setCenterOnLocationStateFromMenu(CenterOnLocationState.RECORD)
+            navigationViewModel.lastKnownGpsLocation.value?.let { location ->
+                updateCurrentLocationIndicatorAndCamera(location, true)
+            }
+            closeRadialMenu()
+        }
+
+        // Radial menu item: Follow + Record
+        fabRadialFollowRecord?.setOnClickListener {
+            navigationViewModel.setCenterOnLocationStateFromMenu(CenterOnLocationState.FOLLOW_AND_RECORD)
+            navigationViewModel.lastKnownGpsLocation.value?.let { location ->
+                updateCurrentLocationIndicatorAndCamera(location, true)
+            }
+            closeRadialMenu()
         }
         fabHideTrack?.setOnClickListener {
             trackViewModel.clearTrack()
@@ -378,7 +418,7 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
 
         val state = navigationViewModel.centerOnLocationState.value
         val shouldFollow =
-            state == CenterOnLocationState.FOLLOW || state == CenterOnLocationState.RECORD
+            state == CenterOnLocationState.FOLLOW || state == CenterOnLocationState.RECORD || state == CenterOnLocationState.FOLLOW_AND_RECORD
         if (isUserPanning && (System.currentTimeMillis() - lastUserInteractionTime > USER_INTERACTION_TIMEOUT_MS)) {
             isUserPanning = false
         }
@@ -420,6 +460,11 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
                 fabCenterOnLocation?.setImageResource(R.drawable.ic_record)
                 fabCenterOnLocation?.backgroundTintList = ColorStateList.valueOf(Color.RED)
             }
+
+            CenterOnLocationState.FOLLOW_AND_RECORD -> {
+                fabCenterOnLocation?.setImageResource(R.drawable.ic_record_voice_over)
+                fabCenterOnLocation?.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#FF9800"))
+            }
         }
     }
 
@@ -448,6 +493,9 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         }
         val showStandardFabs = !isNavigatingOrOffRoute
         fabCenterOnLocation?.visibility = if (showStandardFabs) View.VISIBLE else View.GONE
+        if (!showStandardFabs) {
+            closeRadialMenu()
+        }
         mainMenuButton?.visibility = if (showStandardFabs) View.VISIBLE else View.GONE
         fabToggleGasLayer?.visibility = if (showStandardFabs) View.VISIBLE else View.GONE
     }
@@ -543,5 +591,57 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
             }
         }
         return super.onContextItemSelected(item)
+    }
+
+    private val radialItems: List<FloatingActionButton>
+        get() = listOfNotNull(fabRadialFollow, fabRadialRecord, fabRadialFollowRecord)
+
+    /** Open the radial menu with a staggered scale+fade animation. */
+    private fun openRadialMenu() {
+        if (isRadialMenuOpen) return
+        isRadialMenuOpen = true
+
+        val items = radialItems
+        val startDelayStep = radialMenuAnimDuration / items.size.coerceAtLeast(1)
+
+        items.forEachIndexed { index, fab ->
+            fab.visibility = View.VISIBLE
+            fab.scaleX = 0f
+            fab.scaleY = 0f
+            fab.alpha = 0f
+
+            fab.animate()
+                .scaleX(1f)
+                .scaleY(1f)
+                .alpha(1f)
+                .setDuration(radialMenuAnimDuration)
+                .setStartDelay((index * startDelayStep).toLong())
+                .setInterpolator(AccelerateDecelerateInterpolator())
+                .start()
+        }
+    }
+
+    /** Close the radial menu with a reverse animation. */
+    private fun closeRadialMenu() {
+        if (!isRadialMenuOpen) return
+
+        val items = radialItems
+        val startDelayStep = radialMenuAnimDuration / items.size.coerceAtLeast(1)
+
+        items.forEachIndexed { index, fab ->
+            fab.animate()
+                .scaleX(0f)
+                .scaleY(0f)
+                .alpha(0f)
+                .setDuration(radialMenuAnimDuration)
+                .setStartDelay(((items.size - 1 - index) * startDelayStep).toLong())
+                .setInterpolator(AccelerateDecelerateInterpolator())
+                .withEndAction {
+                    fab.visibility = View.GONE
+                }
+                .start()
+        }
+
+        isRadialMenuOpen = false
     }
 }

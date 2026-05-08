@@ -24,7 +24,8 @@ import org.maplibre.android.geometry.LatLng
 enum class CenterOnLocationState {
     INACTIVE,
     FOLLOW,
-    RECORD
+    RECORD,
+    FOLLOW_AND_RECORD
 }
 
 class NavigationViewModel(application: Application) : AndroidViewModel(application) {
@@ -50,23 +51,21 @@ class NavigationViewModel(application: Application) : AndroidViewModel(applicati
     }
 
 
+    /**
+     * Short tap on FAB: if currently active (not INACTIVE), reset to INACTIVE.
+     * If already INACTIVE, do nothing (the radial menu is shown on long press).
+     */
     fun onCenterButtonClicked() {
-        val newState = when (_centerOnLocationState.value) {
-            CenterOnLocationState.INACTIVE -> CenterOnLocationState.INACTIVE
-            CenterOnLocationState.FOLLOW -> CenterOnLocationState.RECORD
-            CenterOnLocationState.RECORD -> CenterOnLocationState.FOLLOW
+        if (_centerOnLocationState.value != CenterOnLocationState.INACTIVE) {
+            _centerOnLocationState.value = CenterOnLocationState.INACTIVE
+            setCenterOnLocationState(CenterOnLocationState.INACTIVE)
         }
-        _centerOnLocationState.value = newState
-        setCenterOnLocationState(newState)
     }
-    fun onCenterButtonLongClicked() {
-        val newState = when (_centerOnLocationState.value) {
-            CenterOnLocationState.INACTIVE -> CenterOnLocationState.FOLLOW
-            CenterOnLocationState.FOLLOW -> CenterOnLocationState.INACTIVE
-            CenterOnLocationState.RECORD -> CenterOnLocationState.INACTIVE
-        }
-        _centerOnLocationState.value = newState
-        setCenterOnLocationState(newState)
+
+    /** Long press shows the radial menu (only relevant when INACTIVE). */
+    fun setCenterOnLocationStateFromMenu(state: CenterOnLocationState) {
+        _centerOnLocationState.value = state
+        setCenterOnLocationState(state)
     }
 
     private fun setCenterOnLocationState(state: CenterOnLocationState) {
