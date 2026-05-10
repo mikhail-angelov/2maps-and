@@ -66,7 +66,7 @@
         android:src="@drawable/ic_navigation"
         android:visibility="gone"
         app:fabSize="mini"
-        app:backgroundTint="#9C27B0"
+        app:backgroundTint="#4CAF50"
         app:layout_constraintBottom_toTopOf="@+id/fabCenterOnLocationInFragment"
         app:layout_constraintEnd_toEndOf="@+id/fabCenterOnLocationInFragment"
         app:layout_constraintStart_toStartOf="@+id/fabCenterOnLocationInFragment"
