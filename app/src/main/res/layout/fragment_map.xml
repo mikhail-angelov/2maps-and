@@ -57,7 +57,7 @@
         app:layout_constraintEnd_toEndOf="parent"
         tools:visibility="visible" />
 
-    <!-- Radial menu option: Follow only -->
+    <!-- Radial menu option: Follow only (above main FAB) -->
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/fabRadialFollow"
         android:layout_width="wrap_content"
@@ -72,7 +72,7 @@
         app:layout_constraintStart_toStartOf="@+id/fabCenterOnLocationInFragment"
         tools:visibility="visible" />
 
-    <!-- Radial menu option: Record only (bottom-left of main FAB) -->
+    <!-- Radial menu option: Record only (left of main FAB) -->
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/fabRadialRecord"
         android:layout_width="wrap_content"
@@ -86,7 +86,7 @@
         app:layout_constraintBottom_toBottomOf="@+id/fabCenterOnLocationInFragment"
         tools:visibility="visible" />
 
-    <!-- Radial menu option: Follow + Record (left of main FAB, above Record) -->
+    <!-- Radial menu option: Follow + Record (diagonally top-left of main FAB) -->
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/fabRadialFollowRecord"
         android:layout_width="wrap_content"
@@ -96,9 +96,8 @@
         android:visibility="gone"
         app:fabSize="mini"
         app:backgroundTint="#43A047"
-        app:layout_constraintBottom_toTopOf="@+id/fabRadialRecord"
-        app:layout_constraintEnd_toEndOf="@+id/fabRadialRecord"
-        app:layout_constraintStart_toStartOf="@+id/fabRadialRecord"
+        app:layout_constraintBottom_toTopOf="@+id/fabCenterOnLocationInFragment"
+        app:layout_constraintEnd_toStartOf="@+id/fabCenterOnLocationInFragment"
         tools:visibility="visible" />
 
     <!-- Gas layer toggle button (positioned relative to the recording radial buttons area) -->
