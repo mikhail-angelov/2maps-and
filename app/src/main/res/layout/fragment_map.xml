@@ -53,79 +53,77 @@
         android:layout_margin="16dp"
         android:contentDescription="Center on current location"
         android:src="@drawable/ic_navigation"
-        android:visibility="gone"
         app:layout_constraintBottom_toTopOf="@id/navigationInfoPanel"
         app:layout_constraintEnd_toEndOf="parent"
         tools:visibility="visible" />
 
-    <!-- Radial menu option: Follow only -->
+    <!-- Radial menu option: Follow only (above main FAB) -->
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/fabRadialFollow"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:contentDescription="Follow my location"
-        android:src="@drawable/ic_my_location"
+        android:src="@drawable/ic_navigation"
         android:visibility="gone"
         app:fabSize="mini"
-        app:backgroundTint="#9C27B0"
+        app:backgroundTint="#4CAF50"
         app:layout_constraintBottom_toTopOf="@+id/fabCenterOnLocationInFragment"
         app:layout_constraintEnd_toEndOf="@+id/fabCenterOnLocationInFragment"
         app:layout_constraintStart_toStartOf="@+id/fabCenterOnLocationInFragment"
         tools:visibility="visible" />
 
-    <!-- Radial menu option: Record only (diagonal down-left) -->
+    <!-- Radial menu option: Record only (left of main FAB) -->
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/fabRadialRecord"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:contentDescription="Record track"
-        android:src="@drawable/ic_fiber_manual_record"
+        android:src="@drawable/ic_record"
         android:visibility="gone"
         app:fabSize="mini"
         app:backgroundTint="#E53935"
-        app:layout_constraintBottom_toBottomOf="@+id/fabCenterOnLocationInFragment"
         app:layout_constraintEnd_toStartOf="@+id/fabCenterOnLocationInFragment"
+        app:layout_constraintBottom_toBottomOf="@+id/fabCenterOnLocationInFragment"
         tools:visibility="visible" />
 
-    <!-- Radial menu option: Follow + Record (horizontal right) -->
+    <!-- Radial menu option: Follow + Record (diagonally top-left of main FAB) -->
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/fabRadialFollowRecord"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:contentDescription="Follow and record track"
-        android:src="@drawable/ic_record_voice_over"
+        android:src="@drawable/ic_navigation"
         android:visibility="gone"
         app:fabSize="mini"
-        app:backgroundTint="#43A047"
-        app:layout_constraintBottom_toBottomOf="@+id/fabCenterOnLocationInFragment"
-        app:layout_constraintEnd_toEndOf="@+id/fabCenterOnLocationInFragment"
+        app:backgroundTint="#9C27B0"
+        app:layout_constraintBottom_toTopOf="@+id/fabCenterOnLocationInFragment"
+        app:layout_constraintEnd_toStartOf="@+id/fabCenterOnLocationInFragment"
         tools:visibility="visible" />
 
+    <!-- Gas layer toggle button (positioned relative to the recording radial buttons area) -->
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/fabToggleGasLayer"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginEnd="8dp"
         android:contentDescription="Toggle Gas Layer"
         android:src="@drawable/ic_local_gas_station"
         android:visibility="gone"
-        app:layout_constraintBottom_toBottomOf="@+id/fabCenterOnLocationInFragment"
-        app:layout_constraintEnd_toStartOf="@+id/fabCenterOnLocationInFragment"
-        app:layout_constraintTop_toTopOf="@+id/fabCenterOnLocationInFragment"
+        app:layout_constraintBottom_toBottomOf="@+id/fabRadialRecord"
+        app:layout_constraintEnd_toStartOf="@+id/fabRadialRecord"
+        app:layout_constraintTop_toTopOf="@+id/fabRadialRecord"
         tools:ignore="HardcodedText"
         tools:visibility="visible" />
 
-    <com.google.android.material.floatingactionbutton.FloatingActionButton
+    <com.google.android.material.floatingaction_button.FloatingActionButton
         android:id="@+id/fabHideTrack"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginEnd="8dp"
         android:contentDescription="Hide current track"
         android:src="@drawable/ic_timeline_off"
         android:visibility="gone"
-        app:layout_constraintBottom_toBottomOf="@+id/fabCenterOnLocationInFragment"
+        app:layout_constraintBottom_toBottomOf="@+id/fabToggleGasLayer"
         app:layout_constraintEnd_toStartOf="@+id/fabToggleGasLayer"
-        app:layout_constraintTop_toTopOf="@+id/fabCenterOnLocationInFragment"
+        app:layout_constraintTop_toTopOf="@+id/fabToggleGasLayer"
         tools:ignore="HardcodedText"
         tools:visibility="visible" />
 

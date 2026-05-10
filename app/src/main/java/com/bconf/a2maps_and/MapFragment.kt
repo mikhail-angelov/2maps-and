@@ -186,7 +186,10 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
             if (isRadialMenuOpen) {
                 closeRadialMenu()
             } else if (navigationViewModel.centerOnLocationState.value != CenterOnLocationState.INACTIVE) {
+                // If already active, just reset to inactive (cancel)
                 navigationViewModel.onCenterButtonClicked()
+            } else {
+                // If INACTIVE and menu is closed, pressing again does nothing
             }
         }
         fabCenterOnLocation?.setOnLongClickListener {
@@ -620,6 +623,9 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         if (isRadialMenuOpen) return
         isRadialMenuOpen = true
 
+        // Hide gas layer button while radial menu is open
+        fabToggleGasLayer?.visibility = View.GONE
+
         val items = radialItems
         val startDelayStep = radialMenuAnimDuration / items.size.coerceAtLeast(1)
 
@@ -662,5 +668,10 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         }
 
         isRadialMenuOpen = false
+
+        // Restore gas layer button visibility after closing
+        val navState = navigationViewModel.navigationState.value
+        val showStandardFabs = navState == NavigationState.IDLE
+        fabToggleGasLayer?.visibility = if (showStandardFabs) View.VISIBLE else View.GONE
     }
 }
