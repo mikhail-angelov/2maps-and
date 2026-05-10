@@ -52,16 +52,22 @@
     <fragment
         android:id="@+id/placemarksFragment"
         android:name="com.bconf.a2maps_and.placemark.PlacemarksFragment"
-        android_label="Placemarks"
-        tools:layout="@layout/fragment_placemarks" />
+        android:label="Placemarks"
+        tools:layout="@layout/fragment_placemarks">
         <action
             android:id="@+id/action_placemarksFragment_to_mapFragment"
             app:destination="@id/mapFragment" />
+    </fragment>
     <fragment
         android:id="@+id/trackFragment"
         android:name="com.bconf.a2maps_and.track.TrackFragment"
         android:label="Tracks"
         tools:layout="@layout/fragment_track" />
+    <fragment
+        android:id="@+id/authFragment"
+        android:name="com.bconf.a2maps_and.auth.AuthFragment"
+        android:label="2maps.xyz"
+        tools:layout="@layout/fragment_auth" />
     <fragment
         android:id="@+id/mapsFragment"
         android:name="com.bconf.a2maps_and.maps.MapsFragment"
