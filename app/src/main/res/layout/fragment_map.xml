@@ -92,10 +92,10 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:contentDescription="Follow and record track"
-        android:src="@drawable/ic_record_voice_over"
+        android:src="@drawable/ic_navigation"
         android:visibility="gone"
         app:fabSize="mini"
-        app:backgroundTint="#43A047"
+        app:backgroundTint="#9C27B0"
         app:layout_constraintBottom_toTopOf="@+id/fabCenterOnLocationInFragment"
         app:layout_constraintEnd_toStartOf="@+id/fabCenterOnLocationInFragment"
         tools:visibility="visible" />
