@@ -67,6 +67,7 @@
         android:visibility="gone"
         app:fabSize="mini"
         app:backgroundTint="#4CAF50"
+        android:layout_marginBottom="8dp"
         app:layout_constraintBottom_toTopOf="@+id/fabCenterOnLocationInFragment"
         app:layout_constraintEnd_toEndOf="@+id/fabCenterOnLocationInFragment"
         app:layout_constraintStart_toStartOf="@+id/fabCenterOnLocationInFragment"
@@ -82,6 +83,7 @@
         android:visibility="gone"
         app:fabSize="mini"
         app:backgroundTint="#E53935"
+        android:layout_marginEnd="8dp"
         app:layout_constraintEnd_toStartOf="@+id/fabCenterOnLocationInFragment"
         app:layout_constraintBottom_toBottomOf="@+id/fabCenterOnLocationInFragment"
         tools:visibility="visible" />
@@ -96,6 +98,8 @@
         android:visibility="gone"
         app:fabSize="mini"
         app:backgroundTint="#9C27B0"
+        android:layout_marginBottom="8dp"
+        android:layout_marginEnd="8dp"
         app:layout_constraintBottom_toTopOf="@+id/fabCenterOnLocationInFragment"
         app:layout_constraintEnd_toStartOf="@+id/fabCenterOnLocationInFragment"
         tools:visibility="visible" />
@@ -108,13 +112,13 @@
         android:contentDescription="Toggle Gas Layer"
         android:src="@drawable/ic_local_gas_station"
         android:visibility="gone"
-        app:layout_constraintBottom_toBottomOf="@+id/fabRadialRecord"
-        app:layout_constraintEnd_toStartOf="@+id/fabRadialRecord"
-        app:layout_constraintTop_toTopOf="@+id/fabRadialRecord"
+        android:layout_marginEnd="8dp"
+        app:layout_constraintEnd_toStartOf="@+id/fabCenterOnLocationInFragment"
+        app:layout_constraintBottom_toBottomOf="@+id/fabCenterOnLocationInFragment"
         tools:ignore="HardcodedText"
         tools:visibility="visible" />
 
-    <com.google.android.material.floatingaction_button.FloatingActionButton
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/fabHideTrack"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
