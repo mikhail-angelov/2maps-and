@@ -265,6 +265,9 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
     override fun onMapReady(mapLibreMap: MapLibreMap) {
         this.map = mapLibreMap
 
+        // Enable scale bar
+        map.setScaleBarEnabled(true)
+
         map.addOnCameraMoveStartedListener { reason ->
             if (reason == MapLibreMap.OnCameraMoveStartedListener.REASON_API_GESTURE) {
                 isUserPanning = true
