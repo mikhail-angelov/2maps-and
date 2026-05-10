@@ -40,7 +40,6 @@ import com.bconf.a2maps_and.placemark.PlacemarkModal
 import com.bconf.a2maps_and.placemark.PlacemarksViewModel
 import com.bconf.a2maps_and.track.TrackLayerManager
 import com.bconf.a2maps_and.track.TrackViewModel
-import com.google.android.material.floatingactionbutton.FloatingActionButton
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.launch
