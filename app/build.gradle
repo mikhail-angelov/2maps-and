@@ -85,6 +85,9 @@ dependencies {
     implementation 'com.mapbox.mapboxsdk:mapbox-sdk-geojson:7.7.0'
     implementation 'com.mapbox.mapboxsdk:mapbox-sdk-turf:7.7.0'
 
+    // Scale bar plugin
+    implementation 'org.maplibre.gl:android-plugin-scalebar-v9:3.0.2'
+
     // Coroutines
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3'
 

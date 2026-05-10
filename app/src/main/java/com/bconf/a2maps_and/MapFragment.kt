@@ -266,7 +266,18 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         this.map = mapLibreMap
 
         // Enable scale bar
-        map.setScaleBarEnabled(true)
+        val scaleBarPlugin = org.maplibre.android.plugins.scalebar.ScaleBarPlugin(mapView, map)
+        val scaleBarOptions = org.maplibre.android.plugins.scalebar.ScaleBarOptions(requireContext())
+        scaleBarOptions
+            .setTextColor(android.R.color.black)
+            .setTextSize(12f)
+            .setBarHeight(3f)
+            .setBorderWidth(1f)
+            .setRefreshInterval(15)
+            .setMarginTop(10f)
+            .setMarginLeft(10f)
+            .setTextBarMargin(5f)
+        scaleBarPlugin.create(scaleBarOptions)
 
         map.addOnCameraMoveStartedListener { reason ->
             if (reason == MapLibreMap.OnCameraMoveStartedListener.REASON_API_GESTURE) {
