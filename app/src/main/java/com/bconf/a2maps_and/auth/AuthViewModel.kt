@@ -3,10 +3,9 @@ package com.bconf.a2maps_and.auth
 import android.app.Application
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.LiveData
+import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.viewModelScope
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 data class AuthUiState(
@@ -18,17 +17,17 @@ data class AuthUiState(
 
 class AuthViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val _uiState = MutableStateFlow(
+    private val _uiState = MutableLiveData(
         AuthUiState(
             isLoggedIn = AuthRepository.isLoggedIn(),
             email = AuthRepository.getUserEmail()
         )
     )
-    val uiState: StateFlow<AuthUiState> = _uiState.asStateFlow()
+    val uiState: LiveData<AuthUiState> = _uiState
 
     fun login(email: String, password: String) {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+            _uiState.value = _uiState.value?.copy(isLoading = true, error = null)
             try {
                 val response = AuthRepository.api.login(LoginRequest(email, password))
                 if (response.isSuccessful) {
@@ -40,21 +39,21 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                             email = body.user?.email
                         )
                     } else {
-                        _uiState.value = _uiState.value.copy(
+                        _uiState.value = _uiState.value?.copy(
                             isLoading = false,
                             error = "Empty response from server"
                         )
                     }
                 } else {
                     val errorBody = response.errorBody()?.string() ?: "Login failed"
-                    _uiState.value = _uiState.value.copy(
+                    _uiState.value = _uiState.value?.copy(
                         isLoading = false,
                         error = errorBody
                     )
                 }
             } catch (e: Exception) {
                 Log.e("AuthViewModel", "Login error", e)
-                _uiState.value = _uiState.value.copy(
+                _uiState.value = _uiState.value?.copy(
                     isLoading = false,
                     error = "Network error: ${e.localizedMessage}"
                 )
@@ -64,7 +63,7 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
 
     fun signUp(name: String, email: String, password: String) {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+            _uiState.value = _uiState.value?.copy(isLoading = true, error = null)
             try {
                 val response = AuthRepository.api.signUp(SignUpRequest(name, email, password))
                 if (response.isSuccessful) {
@@ -76,21 +75,21 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                             email = body.user?.email
                         )
                     } else {
-                        _uiState.value = _uiState.value.copy(
+                        _uiState.value = _uiState.value?.copy(
                             isLoading = false,
                             error = "Empty response from server"
                         )
                     }
                 } else {
                     val errorBody = response.errorBody()?.string() ?: "Sign up failed"
-                    _uiState.value = _uiState.value.copy(
+                    _uiState.value = _uiState.value?.copy(
                         isLoading = false,
                         error = errorBody
                     )
                 }
             } catch (e: Exception) {
                 Log.e("AuthViewModel", "SignUp error", e)
-                _uiState.value = _uiState.value.copy(
+                _uiState.value = _uiState.value?.copy(
                     isLoading = false,
                     error = "Network error: ${e.localizedMessage}"
                 )

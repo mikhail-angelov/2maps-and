@@ -20,7 +20,6 @@ interface MapsApi {
 
     @POST("/marks/m/sync")
     suspend fun syncMarks(
-        @Header("authorization") token: String,
         @Body marks: List<ServerPlacemark>
     ): Response<List<ServerPlacemark>>
 }

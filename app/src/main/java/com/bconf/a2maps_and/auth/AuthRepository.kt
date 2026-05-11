@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.util.Log
 import okhttp3.OkHttpClient
+import okhttp3.Protocol
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
@@ -18,7 +19,7 @@ object AuthRepository {
     private const val KEY_USER_EMAIL = "user_email"
 
     // Change this to your server URL
-    private const val BASE_URL = "https://2maps.xyz"
+    private const val BASE_URL = "https://2maps.xyz/"
 
     private lateinit var prefs: SharedPreferences
     private var cachedToken: String? = null
@@ -28,10 +29,32 @@ object AuthRepository {
             level = HttpLoggingInterceptor.Level.BODY
         }
         OkHttpClient.Builder()
+            .protocols(listOf(Protocol.HTTP_1_1))
+            .addInterceptor { chain ->
+                val request = chain.request().newBuilder()
+                    .header("User-Agent", "Mozilla/5.0 (Linux; Android 13; Pixel 6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36")
+                    .header("Accept", "application/json")
+                    .header("Accept-Language", "en-US,en;q=0.9")
+                    // Attach Bearer token if available
+                    .apply {
+                        cachedToken?.let { header("Authorization", "Bearer $it") }
+                    }
+                    .build()
+                val response = chain.proceed(request)
+
+                // Detect Cloudflare HTML challenge masquerading as 200
+                if (response.code == 200) {
+                    val contentType = response.header("Content-Type") ?: ""
+                    if ("text/html" in contentType) {
+                        Log.w(TAG, "Cloudflare challenge detected! Got HTML instead of JSON.")
+                    }
+                }
+                response
+            }
             .addInterceptor(logging)
             .connectTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(30, TimeUnit.SECONDS)
-            .writeTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(120, TimeUnit.SECONDS)
+            .writeTimeout(120, TimeUnit.SECONDS)
             .build()
     }
 

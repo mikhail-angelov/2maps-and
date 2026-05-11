@@ -202,7 +202,7 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         // Radial menu item: Follow
         fabRadialFollow?.setOnClickListener {
             navigationViewModel.setCenterOnLocationStateFromMenu(CenterOnLocationState.FOLLOW)
-            navigationViewModel.lastKnownGpsLocation.value?.let { location ->
+        navigationViewModel.lastKnownGpsLocation.value?.let { location ->
                 updateCurrentLocationIndicatorAndCamera(location, true)
             }
             closeRadialMenu()
@@ -269,14 +269,16 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         val scaleBarPlugin = org.maplibre.android.plugins.scalebar.ScaleBarPlugin(mapView, map)
         val scaleBarOptions = org.maplibre.android.plugins.scalebar.ScaleBarOptions(requireContext())
         scaleBarOptions
-            .setTextColor(android.R.color.black)
-            .setTextSize(12f)
-            .setBarHeight(3f)
+            .setTextColor(android.graphics.Color.BLACK)
+            .setTextSize(44f)
+            .setBarHeight(4f)
             .setBorderWidth(1f)
             .setRefreshInterval(15)
-            .setMarginTop(10f)
+            .setMarginTop(20f)
             .setMarginLeft(10f)
             .setTextBarMargin(5f)
+            .setShowTextBorder(true)
+            .setMetricUnit(true)
         scaleBarPlugin.create(scaleBarOptions)
 
         map.addOnCameraMoveStartedListener { reason ->

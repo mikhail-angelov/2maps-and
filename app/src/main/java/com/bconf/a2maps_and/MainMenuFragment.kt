@@ -1,5 +1,6 @@
 package com.bconf.a2maps_and
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.fragment.app.Fragment
 import android.view.LayoutInflater
@@ -11,6 +12,9 @@ import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.bconf.a2maps_and.auth.AuthRepository
+import com.bconf.a2maps_and.placemark.Placemark
+import com.bconf.a2maps_and.placemark.PlacemarkService
+import com.google.gson.Gson
 import kotlinx.coroutines.launch
 
 class MainMenuFragment : Fragment() {
@@ -66,7 +70,7 @@ class MainMenuFragment : Fragment() {
     private fun syncPlacemarks() {
         lifecycleScope.launch {
             try {
-                val token = AuthRepository.getToken() ?: return@launch
+                if (!AuthRepository.isLoggedIn()) return@launch
                 val currentPlacemarks = com.bconf.a2maps_and.placemark.PlacemarkService.placemarks.value
 
                 val serverMarks = currentPlacemarks.map { pm ->
@@ -83,16 +87,31 @@ class MainMenuFragment : Fragment() {
 
                 Toast.makeText(context, "Syncing ${serverMarks.size} placemarks...", Toast.LENGTH_SHORT).show()
 
-                val response = AuthRepository.api.syncMarks(
-                    token = "Bearer $token",
-                    marks = serverMarks
-                )
+                val response = AuthRepository.api.syncMarks(serverMarks)
 
                 if (response.isSuccessful) {
-                    val syncedMarks = response.body()
+                    val syncedMarks = response.body() ?: emptyList()
+                    val activePlacemarks = syncedMarks
+                        .filter { it.removed != true }
+                        .map { sm ->
+                            Placemark(
+                                id = sm.id,
+                                name = sm.name,
+                                latitude = sm.lat,
+                                longitude = sm.lng,
+                                rate = sm.rate,
+                                description = sm.description,
+                                timestamp = sm.timestamp
+                            )
+                        }
+                    val serviceIntent = Intent(requireContext(), PlacemarkService::class.java).apply {
+                        action = PlacemarkService.ACTION_UPSERT_PLACEMARKS
+                        putExtra(PlacemarkService.EXTRA_PLACEMARKS, Gson().toJson(activePlacemarks))
+                    }
+                    requireContext().startService(serviceIntent)
                     Toast.makeText(
                         context,
-                        "Sync complete: ${syncedMarks?.size ?: 0} marks on server",
+                        "Sync complete: ${syncedMarks.size} marks",
                         Toast.LENGTH_SHORT
                     ).show()
                 } else {

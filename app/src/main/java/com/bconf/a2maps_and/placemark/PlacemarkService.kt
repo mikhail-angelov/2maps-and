@@ -51,7 +51,9 @@ class PlacemarkService : Service() {
         const val ACTION_IMPORT_PLACEMARKS_FROM_URI = "ACTION_IMPORT_PLACEMARKS_FROM_URI"
         const val ACTION_IMPORT_GAS_STATIONS_FROM_URI = "ACTION_IMPORT_GAS_STATIONS_FROM_URI"
         const val ACTION_TOGGLE_GAS_LAYER_VISIBILITY = "ACTION_TOGGLE_GAS_LAYER_VISIBILITY"
+        const val ACTION_UPSERT_PLACEMARKS = "ACTION_UPSERT_PLACEMARKS"
         const val EXTRA_PLACEMARK = "EXTRA_PLACEMARK"
+        const val EXTRA_PLACEMARKS = "EXTRA_PLACEMARKS"
 
         private const val PREFS_NAME = "PlacemarkServicePrefs"
         private const val GAS_LAYER_VISIBILITY_KEY = "gas_layer_visibility"
@@ -125,6 +127,14 @@ class PlacemarkService : Service() {
 
             ACTION_TOGGLE_GAS_LAYER_VISIBILITY -> {
                 toggleGasLayerVisibility()
+            }
+
+            ACTION_UPSERT_PLACEMARKS -> {
+                intent.getStringExtra(EXTRA_PLACEMARKS)?.let { json ->
+                    val type = object : TypeToken<List<Placemark>>() {}.type
+                    val marks: List<Placemark> = Gson().fromJson(json, type) ?: emptyList()
+                    upsertPlacemarks(marks)
+                }
             }
         }
         return START_STICKY

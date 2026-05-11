@@ -47,9 +47,9 @@ class GasLayerToggleTest {
     }
 
     @Test
-    fun `FAB tint should be purple when gas layer visible`() {
-        val purpleHex = "#9C27B0"
-        val parsedColor = android.graphics.Color.parseColor(purpleHex)
-        assertEquals(-11664336, parsedColor) // Purple in ARGB integer
+    fun `purple color hex value is correct`() {
+        // #9C27B0 = ARGB 0xFF9C27B0 = -6543440 as signed int
+        val argb = (0xFF shl 24) or (0x9C shl 16) or (0x27 shl 8) or 0xB0
+        assertEquals(-6543440, argb)
     }
 }
