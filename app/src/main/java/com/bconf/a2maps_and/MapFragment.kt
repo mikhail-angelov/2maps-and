@@ -1,9 +1,10 @@
 package com.bconf.a2maps_and
 
+import android.annotation.SuppressLint
 import android.content.res.ColorStateList
 import android.graphics.Color
-import android.graphics.PorterDuff
 import android.location.Location
+import androidx.core.graphics.toColorInt
 import android.os.Bundle
 import android.util.Log
 import android.view.ContextMenu
@@ -31,6 +32,7 @@ import com.bconf.a2maps_and.maps.MapsViewModel
 import com.bconf.a2maps_and.maps.PopupItem
 import com.bconf.a2maps_and.maps.PopupMapAdapter
 import com.bconf.a2maps_and.navigation.CenterOnLocationState
+import com.bconf.a2maps_and.navigation.NavigationChooser
 import com.bconf.a2maps_and.navigation.NavigationState
 import com.bconf.a2maps_and.navigation.NavigationViewModel
 import com.google.android.material.floatingactionbutton.FloatingActionButton
@@ -45,6 +47,8 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.onEach
 import org.maplibre.android.MapLibre
+import org.maplibre.android.plugins.scalebar.ScaleBarOptions
+import org.maplibre.android.plugins.scalebar.ScaleBarPlugin
 import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
@@ -133,7 +137,7 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         mainMenuButton = view.findViewById(R.id.mainMenuButton)
 
         mainMenuButton?.setOnClickListener { anchorView ->
-            // Inflate the popup window layout
+            @SuppressLint("InflateParams")
             val popupView = LayoutInflater.from(context).inflate(R.layout.popup_window_layout, null)
             val recyclerView = popupView.findViewById<RecyclerView>(R.id.popup_recycler_view)
 
@@ -232,9 +236,9 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
             viewLifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 placemarkViewModel.isGasLayerVisible.collect { isVisible ->
                     val tint = if (isVisible) {
-                        ColorStateList.valueOf(Color.parseColor("#9C27B0")) // purple
+                        ColorStateList.valueOf("#9C27B0".toColorInt()) // purple
                     } else {
-                        ColorStateList.valueOf(Color.parseColor("#757575")) // default grey
+                        ColorStateList.valueOf("#757575".toColorInt()) // default grey
                     }
                     fabToggleGasLayer?.backgroundTintList = tint
                     fabToggleGasLayer?.imageTintList = ColorStateList.valueOf(Color.WHITE)
@@ -258,8 +262,8 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         this.map = mapLibreMap
 
         // Enable scale bar
-        val scaleBarPlugin = org.maplibre.android.plugins.scalebar.ScaleBarPlugin(mapView, map)
-        val scaleBarOptions = org.maplibre.android.plugins.scalebar.ScaleBarOptions(requireContext())
+        val scaleBarPlugin = ScaleBarPlugin(mapView, map)
+        val scaleBarOptions = ScaleBarOptions(requireContext())
         scaleBarOptions
             .setTextColor(android.R.color.black)
             .setTextSize(44f)
@@ -488,7 +492,7 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
 
             CenterOnLocationState.FOLLOW_AND_RECORD -> {
                 fabCenterOnLocation?.setImageResource(R.drawable.ic_record_voice_over)
-                fabCenterOnLocation?.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#FF9800"))
+                fabCenterOnLocation?.backgroundTintList = ColorStateList.valueOf("#FF9800".toColorInt())
             }
         }
     }
@@ -497,7 +501,7 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         val toast = Toast.makeText(requireContext(), message, Toast.LENGTH_LONG)
         if (isError) {
             @Suppress("DEPRECATION")
-            toast.view?.setBackgroundColor(android.graphics.Color.RED)
+            toast.view?.setBackgroundColor(Color.RED)
         }
         toast.show()
     }
@@ -594,17 +598,13 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
 
     override fun onContextItemSelected(item: MenuItem): Boolean {
         longPressedLatLng?.let { coords ->
-            val coordinateText = "Lat: %.4f, Lng: %.4f".format(coords.latitude, coords.longitude)
             when (item.itemId) {
                 ID_MENU_NAVIGATE -> {
-                    Log.d(
-                        "MapContextMenu",
-                        "Navigate to point: $coordinateText : ${navigationViewModel.navigationState.value}"
-                    )
-                    if (navigationViewModel.navigationState.value == NavigationState.IDLE) {
-                        navigationViewModel.requestNavigationTo(coords) // ViewModel handles the rest
-                    } else {
-                        navigationViewModel.stopNavigation()
+                    NavigationChooser.show(requireContext(), coords.latitude, coords.longitude) {
+                        if (navigationViewModel.navigationState.value != NavigationState.IDLE) {
+                            navigationViewModel.stopNavigation()
+                        }
+                        navigationViewModel.requestNavigationTo(coords)
                     }
                     return true
                 }
@@ -644,7 +644,7 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
                 .scaleY(1f)
                 .alpha(1f)
                 .setDuration(radialMenuAnimDuration)
-                .setStartDelay((index * startDelayStep).toLong())
+                .setStartDelay(index * startDelayStep)
                 .setInterpolator(AccelerateDecelerateInterpolator())
                 .start()
         }
@@ -663,7 +663,7 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
                 .scaleY(0f)
                 .alpha(0f)
                 .setDuration(radialMenuAnimDuration)
-                .setStartDelay(((items.size - 1 - index) * startDelayStep).toLong())
+                .setStartDelay((items.size - 1 - index) * startDelayStep)
                 .setInterpolator(AccelerateDecelerateInterpolator())
                 .withEndAction {
                     fab.visibility = View.GONE

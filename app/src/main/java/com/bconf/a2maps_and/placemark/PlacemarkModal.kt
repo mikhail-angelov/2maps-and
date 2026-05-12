@@ -21,6 +21,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.navigation.fragment.findNavController
 import com.bconf.a2maps_and.R
 import com.bconf.a2maps_and.databinding.BottomSheetPlacemarkBinding
+import com.bconf.a2maps_and.navigation.NavigationChooser
 import com.bconf.a2maps_and.navigation.NavigationViewModel
 import com.bconf.a2maps_and.utils.PlacemarkUtils
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
@@ -127,13 +128,13 @@ class PlacemarkModal : BottomSheetDialogFragment() {
         }
 
         binding.navigateButton.setOnClickListener {
-            Log.d("PlacemarkModal", "Navigate button clicked for ${placemark.name}")
-            // Navigate to the map screen if not already there
-            if (findNavController().currentDestination?.id != R.id.mapFragment) {
-                findNavController().navigate(R.id.mapFragment)
+            NavigationChooser.show(requireContext(), placemark.latitude, placemark.longitude) {
+                if (findNavController().currentDestination?.id != R.id.mapFragment) {
+                    findNavController().navigate(R.id.mapFragment)
+                }
+                navigationViewModel.requestNavigationTo(LatLng(placemark.latitude, placemark.longitude))
+                dismiss()
             }
-            navigationViewModel.requestNavigationTo(LatLng(placemark.latitude, placemark.longitude))
-            dismiss()
         }
         binding.shareButton.setOnClickListener {
             val lat = placemark.latitude
