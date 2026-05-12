@@ -204,6 +204,7 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
             trackViewModel.clearTrack()
         }
 
+        fabToggleGasLayer?.visibility = View.VISIBLE
         fabToggleGasLayer?.setOnClickListener {
             placemarkViewModel.toggleGasLayerVisibility()
         }
@@ -435,16 +436,6 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
             }
         }
     }
-
-    private fun showCustomToast(message: String, isError: Boolean) {
-        val toast = Toast.makeText(requireContext(), message, Toast.LENGTH_LONG)
-        if (isError) {
-            @Suppress("DEPRECATION")
-            toast.view?.setBackgroundColor(Color.RED)
-        }
-        toast.show()
-    }
-
 
     override fun onStart() {
         super.onStart()

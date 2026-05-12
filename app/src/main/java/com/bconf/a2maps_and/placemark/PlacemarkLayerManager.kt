@@ -25,7 +25,6 @@ import org.maplibre.android.style.layers.PropertyFactory
 import org.maplibre.android.style.layers.SymbolLayer
 import org.maplibre.android.style.sources.GeoJsonSource
 import org.maplibre.geojson.Feature
-import org.maplibre.geojson.FeatureCollection
 
 class PlacemarkLayerManager(
     private val context: Context,
@@ -36,16 +35,14 @@ class PlacemarkLayerManager(
 ) {
 
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+    private var placemarkSource: GeoJsonSource? = null
 
     companion object {
         private const val SOURCE_ID = "placemarks-source"
         private const val CIRCLE_LAYER_ID = "placemarks-circle-layer"
         private const val TEXT_LAYER_ID = "placemarks-text-layer"
 
-        const val PROPERTY_ID = "id"
         const val PROPERTY_NAME = "name"
-        const val PROPERTY_DESCRIPTION = "description"
-        const val PROPERTY_RATE = "rate"
     }
 
 
@@ -144,7 +141,10 @@ class PlacemarkLayerManager(
 
     private fun setupSource(style: Style) {
         if (style.getSource(SOURCE_ID) == null) {
-            style.addSource(GeoJsonSource(SOURCE_ID))
+            placemarkSource = GeoJsonSource(SOURCE_ID)
+            style.addSource(placemarkSource!!)
+        } else {
+            placemarkSource = style.getSourceAs(SOURCE_ID)
         }
     }
 
@@ -197,9 +197,7 @@ class PlacemarkLayerManager(
 
     fun updatePlacemarks(placemarks: List<PlacemarkDisplayItem>) {
         val featureCollection = buildFeatureCollection(placemarks, "PlacemarkManager")
-        map.getStyle { style ->
-            style.getSourceAs<GeoJsonSource>(SOURCE_ID)?.setGeoJson(featureCollection)
-        }
+        placemarkSource?.setGeoJson(featureCollection)
     }
     private fun onPlacemarkClicked(feature: Feature): Boolean {
         Log.d("PlacemarkManager", "Clicked on placemark: ${feature.toJson()}")

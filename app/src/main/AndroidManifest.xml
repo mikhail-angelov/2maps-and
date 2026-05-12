@@ -3,7 +3,7 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"
-        tools:ignore="ForegroundServicePermission" />
+        tools:ignore="ForegroundServicePermission,ForegroundServiceType" />
     <!-- FOREGROUND_SERVICE_LOCATION is required on API 34+ alongside the service's foregroundServiceType -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <uses-permission android:name="android.permission.INTERNET" />
@@ -16,10 +16,6 @@
         <intent>
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="yandexnavi" />
-        </intent>
-        <intent>
-            <action android:name="android.intent.action.VIEW" />
-            <data android:scheme="osmand.navigation" />
         </intent>
     </queries>
 
