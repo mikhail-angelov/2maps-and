@@ -10,8 +10,8 @@ import androidx.recyclerview.widget.RecyclerView
 import com.bconf.a2maps_and.R
 
 class PopupMapAdapter(
-    private val items: List<MapItem>,
-    private val onItemClick: (MapItem) -> Unit
+    private val items: List<PopupItem>,
+    private val onItemClick: (PopupItem) -> Unit
 ) : RecyclerView.Adapter<PopupMapAdapter.ViewHolder>() {
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
@@ -21,21 +21,20 @@ class PopupMapAdapter(
     }
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-        val mapItem = items[position]
+        val item = items[position]
+        val previewFile = (item as? PopupItem.Map)?.mapItem?.previewImage
 
-        if (mapItem.previewImage.exists()) {
-            val bitmap = BitmapFactory.decodeFile(mapItem.previewImage.absolutePath)
+        if (previewFile?.exists() == true) {
+            val bitmap = BitmapFactory.decodeFile(previewFile.absolutePath)
             holder.imageView.setImageBitmap(bitmap)
             holder.textView.visibility = View.GONE
         } else {
             holder.imageView.visibility = View.GONE
-            holder.textView.text = mapItem.name
+            holder.textView.text = item.displayName
             holder.textView.visibility = View.VISIBLE
         }
 
-        holder.itemView.setOnClickListener {
-            onItemClick(mapItem)
-        }
+        holder.itemView.setOnClickListener { onItemClick(item) }
     }
 
     override fun getItemCount(): Int = items.size

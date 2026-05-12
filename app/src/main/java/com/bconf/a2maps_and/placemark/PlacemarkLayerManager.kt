@@ -12,6 +12,8 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import org.maplibre.android.geometry.LatLng
@@ -24,7 +26,6 @@ import org.maplibre.android.style.layers.SymbolLayer
 import org.maplibre.android.style.sources.GeoJsonSource
 import org.maplibre.geojson.Feature
 import org.maplibre.geojson.FeatureCollection
-import org.maplibre.geojson.Point
 
 class PlacemarkLayerManager(
     private val context: Context,
@@ -33,6 +34,8 @@ class PlacemarkLayerManager(
     private val lifecycle: Lifecycle,
     private val onPlacemarkClickListener: (String) -> Unit
 ) {
+
+    private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
     companion object {
         private const val SOURCE_ID = "placemarks-source"
@@ -49,14 +52,12 @@ class PlacemarkLayerManager(
     fun onStyleLoaded(style: Style) {
         setupSource(style)
         setupCircleLayer(style)
+        setupTextLayer(style)
         observePlacemarks()
     }
 
     private fun observePlacemarks() {
-        // Launch a coroutine that is automatically cancelled when the passed lifecycle is destroyed.
-        // We use lifecycle.repeatOnLifecycle to ensure collection only happens when the
-        // lifecycle is at least in the STARTED state.
-        CoroutineScope(Dispatchers.Main).launch { // Or use a scope provided if this class has its own lifecycle
+        scope.launch {
             lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 placemarksViewModel.displayItems.collectLatest { placemarks ->
                     Log.d(
@@ -195,89 +196,9 @@ class PlacemarkLayerManager(
     }
 
     fun updatePlacemarks(placemarks: List<PlacemarkDisplayItem>) {
-        Log.d("PlacemarkManager", "Fetched ${placemarks.size} placemarks from service.")
-
-        if (placemarks.isEmpty()) {
-            Log.w("PlacemarkManager", "No placemarks to display.")
-            // Ensure the source is cleared if there are no placemarks
-            map.getStyle { style ->
-                val source = style.getSourceAs<GeoJsonSource>(SOURCE_ID)
-                source?.setGeoJson(FeatureCollection.fromFeatures(emptyList())) // Clear the source
-            }
-            return // Exit early
-        }
-
-        val features: List<Feature> = placemarks.mapNotNull { p -> // Use mapNotNull
-            val placemark = p.placemark
-            try {
-                // Ensure longitude and latitude are valid numbers
-                if (placemark.longitude.isNaN() || placemark.latitude.isNaN()) {
-                    Log.e(
-                        "PlacemarkManager",
-                        "Invalid coordinates for placemark: ${placemark.name} - Lat: ${placemark.latitude}, Lng: ${placemark.longitude}"
-                    )
-                    return@mapNotNull null
-                }
-                val point = Point.fromLngLat(placemark.longitude, placemark.latitude)
-                val feature = Feature.fromGeometry(point)
-                feature.addStringProperty(PROPERTY_ID, placemark.id)
-                feature.addStringProperty(
-                    PROPERTY_NAME,
-                    placemark.name ?: "Unnamed"
-                ) // Handle null name
-                feature.addStringProperty(PROPERTY_DESCRIPTION, placemark.description ?: "")
-                feature.addNumberProperty(PROPERTY_RATE, placemark.rate ?: 0)
-                feature // Return the valid feature
-            } catch (e: Exception) {
-                Log.e(
-                    "PlacemarkManager",
-                    "Error creating feature for placemark: ${placemark.name}",
-                    e
-                )
-                null // Skip this placemark if there's an error
-            }
-        }
-
-        Log.d("PlacemarkManager", "Number of features created: ${features.size}")
-        if (features.isEmpty() && placemarks.isNotEmpty()) {
-            Log.e(
-                "PlacemarkManager",
-                "All placemarks resulted in invalid features. Check for coordinate or property errors."
-            )
-            // Clear the source if all features failed
-            map.getStyle { style ->
-                val source = style.getSourceAs<GeoJsonSource>(SOURCE_ID)
-                source?.setGeoJson(FeatureCollection.fromFeatures(emptyList()))
-            }
-            return
-        }
-        // Log individual features if the list is small
-        features.forEachIndexed { index, feature ->
-            Log.d("PlacemarkManager", "Feature $index: ${feature.toJson()}")
-        }
-
-        val featureCollection: FeatureCollection = FeatureCollection.fromFeatures(features)
-        Log.d(
-            "PlacemarkManager",
-            "FeatureCollection JSON: ${featureCollection.toJson()}"
-        ) // Already have this, good!
-
+        val featureCollection = buildFeatureCollection(placemarks, "PlacemarkManager")
         map.getStyle { style ->
-            val source = style.getSourceAs<GeoJsonSource>(SOURCE_ID)
-            if (source == null) {
-                Log.e("PlacemarkManager", "GeoJsonSource with ID '$SOURCE_ID' not found!")
-                return@getStyle
-            }
-            try {
-                source.setGeoJson(featureCollection) // The line in question
-                Log.d("PlacemarkManager", "GeoJsonSource updated successfully.")
-            } catch (e: Exception) {
-                Log.e(
-                    "PlacemarkManager",
-                    "Exception during source.setGeoJson()",
-                    e
-                ) // Catch any Java/Kotlin level exceptions
-            }
+            style.getSourceAs<GeoJsonSource>(SOURCE_ID)?.setGeoJson(featureCollection)
         }
     }
     private fun onPlacemarkClicked(feature: Feature): Boolean {
@@ -290,6 +211,7 @@ class PlacemarkLayerManager(
     }
 
     fun cleanup() {
+        scope.cancel()
         map.getStyle { style ->
             if (style.isFullyLoaded) {
                 style.removeLayer(CIRCLE_LAYER_ID)

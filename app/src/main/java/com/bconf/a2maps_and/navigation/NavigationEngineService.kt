@@ -258,12 +258,10 @@ class NavigationEngineService : Service() {
         if (checkGMS()) {
             try {
                 val locationRequestGMS =
-                    com.google.android.gms.location.LocationRequest.create().apply {
-                        interval = LOCATION_UPDATE_INTERVAL
-                        fastestInterval = FASTEST_LOCATION_INTERVAL
-                        priority =
-                            com.google.android.gms.location.LocationRequest.PRIORITY_HIGH_ACCURACY
-                    }
+                    com.google.android.gms.location.LocationRequest.Builder(
+                        com.google.android.gms.location.Priority.PRIORITY_HIGH_ACCURACY,
+                        LOCATION_UPDATE_INTERVAL
+                    ).setMinUpdateIntervalMillis(FASTEST_LOCATION_INTERVAL).build()
                 fusedLocationClient.requestLocationUpdates(
                     locationRequestGMS,
                     locationCallback,
@@ -628,12 +626,12 @@ class NavigationEngineService : Service() {
         if (location.accuracy > 230) {
             return
         }
-        if (navigationState.value != NavigationState.IDLE) {
+        val isRecording = state.value == CenterOnLocationState.RECORD || state.value == CenterOnLocationState.FOLLOW_AND_RECORD
+        if (navigationState.value != NavigationState.IDLE || isRecording) {
             gpxLogger.appendGpxTrackPoint(location)
         }
-        if (state.value == CenterOnLocationState.RECORD || state.value == CenterOnLocationState.FOLLOW_AND_RECORD) {
-            _recordedPath.value = _recordedPath.value  + LatLng(location.latitude, location.longitude)
-            gpxLogger.appendGpxTrackPoint(location)
+        if (isRecording) {
+            _recordedPath.value = _recordedPath.value + LatLng(location.latitude, location.longitude)
         }
 
         _lastLocation.value = location
@@ -744,19 +742,6 @@ class NavigationEngineService : Service() {
         }
 
         if (activeManeuver != null) {
-            val maneuverStartIndex = activeManeuver.begin_shape_index ?: 0
-
-            if (maneuverStartIndex < originalFullRoutePath.size) {
-                var pathLengthToManeuverStart = 0.0
-                for (i in 0 until maneuverStartIndex) {
-                    if (i + 1 < originalFullRoutePath.size) {
-                        pathLengthToManeuverStart += originalFullRoutePath[i].distanceTo(
-                            originalFullRoutePath[i + 1]
-                        )
-                    }
-                }
-            }
-
             val maneuverStartPoint =
                 originalFullRoutePath.getOrNull(activeManeuver.begin_shape_index ?: 0)
             val currentSnappedLatLng = _currentDisplayedPath.value.firstOrNull()
@@ -812,56 +797,36 @@ class NavigationEngineService : Service() {
         }
     }
 
-    private fun stopNavigationLogic() {
-        serviceScope.launch {
-            Log.d("NavigationEngineService", "Stopping Navigation Logic.")
-            gpxLogger.stopGpxLogging()
-            _navigationState.value = NavigationState.IDLE
-            _currentDisplayedPath.value = emptyList()
-            _activeManeuverDetails.value = null
-            _remainingDistanceInMeters.value = 0.0
-            originalFullRoutePath = emptyList()
-            originalManeuvers = emptyList()
-            currentSnappedShapeIndex = 0
-
-            clearSavedNavigationState()
-            updateNotificationText("Navigation stopped.")
-            stopForeground(true)
-            stopSelf()
-        }
+    private fun resetNavigationState() {
+        gpxLogger.stopGpxLogging()
+        _navigationState.value = NavigationState.IDLE
+        _currentDisplayedPath.value = emptyList()
+        _activeManeuverDetails.value = null
+        _remainingDistanceInMeters.value = 0.0
+        originalFullRoutePath = emptyList()
+        originalManeuvers = emptyList()
+        currentSnappedShapeIndex = 0
+        clearSavedNavigationState()
+        updateNotificationText("Navigation stopped.")
     }
 
     private fun updateNotificationText(text: String) {
         if (_navigationState.value != NavigationState.IDLE || text == "Navigation stopped.") {
-//            val notification = buildNotification(text)
-//            val notificationManager =
-//                getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-//            notificationManager.notify(NOTIFICATION_ID, notification)
-            Log.d("NavigationEngineService", "Notification updated: $text")
-        } else {
-            Log.d(
-                "NavigationEngineService",
-                "Skipped notification update, state is IDLE and text is not 'Navigation stopped.'"
-            )
+            val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+                .setOngoing(true)
+                .setContentText(text)
+                .setSmallIcon(R.drawable.ic_launcher_foreground)
+                .setPriority(NotificationCompat.PRIORITY_MIN)
+                .setCategory(Notification.CATEGORY_SERVICE)
+                .build()
+            val notificationManager =
+                getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            notificationManager.notify(NOTIFICATION_ID, notification)
         }
     }
 
     private fun startForegroundServiceWithNotification() {
-        val notificationChannelId = "LOCATION_SERVICE_CHANNEL"
-        val channelName = "Location Service"
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val chan = NotificationChannel(
-                notificationChannelId,
-                channelName,
-                NotificationManager.IMPORTANCE_LOW
-            )
-            chan.lockscreenVisibility = Notification.VISIBILITY_PRIVATE
-            val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-            manager.createNotificationChannel(chan)
-        }
-
-        val notificationBuilder = NotificationCompat.Builder(this, notificationChannelId)
+        val notificationBuilder = NotificationCompat.Builder(this, CHANNEL_ID)
         val notification = notificationBuilder.setOngoing(true)
             .setContentText("2 Maps Navigation")
             .setSmallIcon(R.drawable.ic_launcher_foreground)
@@ -944,23 +909,8 @@ class NavigationEngineService : Service() {
     }
 
     private fun stopNavigationAndService() {
-        Log.d("NavigationService", "stopNavigationAndService called.")
-
-        gpxLogger.stopGpxLogging()
-        _navigationState.value = NavigationState.IDLE
-        _currentDisplayedPath.value = emptyList()
-        _activeManeuverDetails.value = null
-        _remainingDistanceInMeters.value = 0.0
-        originalFullRoutePath = emptyList()
-        originalManeuvers = emptyList()
-        currentSnappedShapeIndex = 0
-
-        clearSavedNavigationState()
-        updateNotificationText("Navigation stopped.")
-
-        stopForeground(STOP_FOREGROUND_REMOVE) // Pass true to remove the notification.
-
-        Log.d("NavigationService", "navigation definitively stopped.")
+        resetNavigationState()
+        stopForeground(STOP_FOREGROUND_REMOVE)
     }
 
     private fun stopService() {

@@ -8,6 +8,8 @@ import androidx.lifecycle.repeatOnLifecycle
 import com.bconf.a2maps_and.R
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
@@ -30,6 +32,7 @@ class TrackLayerManager(
     private val sourceId = "track-source"
     private val layerId = "track-layer"
     private var layer: LineLayer? = null
+    private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
 
     fun setupTrackLayer(style: Style) {
@@ -51,11 +54,12 @@ class TrackLayerManager(
         observeTracks()
     }
 
+    fun cleanup() {
+        scope.cancel()
+    }
+
     private fun observeTracks() {
-        // Launch a coroutine that is automatically cancelled when the passed lifecycle is destroyed.
-        // We use lifecycle.repeatOnLifecycle to ensure collection only happens when the
-        // lifecycle is at least in the STARTED state.
-        CoroutineScope(Dispatchers.Main).launch {
+        scope.launch {
             lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 trackViewModel.trackPoints.collectLatest { trackPoints ->
                     Log.d("TrackLayerManager", "Observed ${trackPoints.size} trackPoints.")

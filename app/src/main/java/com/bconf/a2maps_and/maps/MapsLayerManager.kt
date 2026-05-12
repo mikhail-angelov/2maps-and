@@ -89,16 +89,7 @@ class MapsLayerManager(private val context: Context, private val map: MapLibreMa
         }
 
         val styleJson = when (format) {
-            "pbf", "mvt" -> {
-                context.assets?.open("bright.json")?.bufferedReader()?.use { it.readText() }
-                    ?.replace(
-                        "\"url\": \"asset://planet.mbtiles\"",
-                        "\"url\": \"mbtiles://${file.absolutePath}\""
-                    )
-            }
-
-            "png", "jpg" -> {
-                """
+            "png", "jpg" -> """
             {
               "version": 8,
               "name": "Raster MBTiles",
@@ -120,15 +111,12 @@ class MapsLayerManager(private val context: Context, private val map: MapLibreMa
               ]
             }
             """.trimIndent()
-            }
 
-            else -> {
-                context.assets?.open("bright.json")?.bufferedReader()?.use { it.readText() }
-                    ?.replace(
-                        "\"url\": \"asset://planet.mbtiles\"",
-                        "\"url\": \"mbtiles://${file.absolutePath}\""
-                    )
-            }
+            else -> context.assets?.open("bright.json")?.bufferedReader()?.use { it.readText() }
+                ?.replace(
+                    "\"url\": \"asset://planet.mbtiles\"",
+                    "\"url\": \"mbtiles://${file.absolutePath}\""
+                )
         }
 
 

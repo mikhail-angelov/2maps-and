@@ -4,14 +4,11 @@ import android.app.Application
 import android.util.Log
 import android.util.Xml
 import androidx.lifecycle.AndroidViewModel
-import androidx.lifecycle.LiveData
-import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import org.maplibre.android.geometry.LatLng
 import org.xmlpull.v1.XmlPullParser
 import org.xmlpull.v1.XmlPullParserException
@@ -22,8 +19,8 @@ import java.io.InputStream
 
 class TrackViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val _tracks = MutableLiveData<List<File>>()
-    val tracks: LiveData<List<File>> = _tracks
+    private val _tracks = MutableStateFlow<List<File>>(emptyList())
+    val tracks = _tracks.asStateFlow()
 
     private val _trackPoints = MutableStateFlow<List<LatLng>>(emptyList())
     val trackPoints = _trackPoints.asStateFlow()
@@ -41,17 +38,12 @@ class TrackViewModel(application: Application) : AndroidViewModel(application) {
      */
     fun loadTracks() {
         viewModelScope.launch(Dispatchers.IO) {
-            if (gpxDir.exists() && gpxDir.isDirectory) {
-                val trackFiles = gpxDir.listFiles { _, name -> name.endsWith(".gpx") }
-                    ?.sortedByDescending { it.lastModified() } // Sort by most recent
-
-                withContext(Dispatchers.Main) {
-                    _tracks.value = trackFiles?.toList() ?: emptyList()
-                }
+            _tracks.value = if (gpxDir.exists() && gpxDir.isDirectory) {
+                gpxDir.listFiles { _, name -> name.endsWith(".gpx") }
+                    ?.sortedByDescending { it.lastModified() }
+                    ?: emptyList()
             } else {
-                withContext(Dispatchers.Main) {
-                    _tracks.value = emptyList()
-                }
+                emptyList()
             }
         }
     }

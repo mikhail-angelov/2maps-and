@@ -26,9 +26,9 @@ import androidx.navigation.fragment.findNavController
 import androidx.navigation.fragment.navArgs
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import com.bconf.a2maps_and.maps.MapItem
 import com.bconf.a2maps_and.maps.MapsLayerManager
 import com.bconf.a2maps_and.maps.MapsViewModel
+import com.bconf.a2maps_and.maps.PopupItem
 import com.bconf.a2maps_and.maps.PopupMapAdapter
 import com.bconf.a2maps_and.navigation.CenterOnLocationState
 import com.bconf.a2maps_and.navigation.NavigationState
@@ -89,19 +89,25 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
     private var rerouteButton: ImageButton? = null
     private var mainMenuButton: FloatingActionButton? = null
     private val args: MapFragmentArgs by navArgs()
-    private var initialPlacemarkLat: Float = 999.0F
-    private var initialPlacemarkLng: Float = 999.0F
+
+    private var initialPlacemarkLat: Float? = null
+    private var initialPlacemarkLng: Float? = null
     private var initialPlacemarkId: String = ""
     private var isLocationLoaded: Boolean = false
     private var lastUserInteractionTime: Long = 0
     private val USER_INTERACTION_TIMEOUT_MS = 60 * 1000 // 1 minute
 
+    companion object {
+        private const val DEFAULT_LOCATION_LAT = 56.292374
+        private const val DEFAULT_LOCATION_LNG = 43.985402
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         MapLibre.getInstance(requireContext())
 
-        initialPlacemarkLat = args.placemarkLat
-        initialPlacemarkLng = args.placemarkLng
+        initialPlacemarkLat = args.placemarkLat.takeUnless { it == 999.0F }
+        initialPlacemarkLng = args.placemarkLng.takeUnless { it == 999.0F }
         initialPlacemarkId = args.placemarkId
     }
 
@@ -131,38 +137,26 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
             val popupView = LayoutInflater.from(context).inflate(R.layout.popup_window_layout, null)
             val recyclerView = popupView.findViewById<RecyclerView>(R.id.popup_recycler_view)
 
-            // Create the list of items for the popup
-            val popupItems = mutableListOf<MapItem>()
+            // Build popup items: Menu action first, then available maps
+            val popupItems = mutableListOf<PopupItem>(PopupItem.Menu)
+            mapsViewModel.maps.value?.mapTo(popupItems) { PopupItem.Map(it) }
 
-            // Add the static "Menu" item first
-            val menuDummyFile = File("menu") // Create a dummy file for the MapItem
-            val menuMapItem = MapItem(menuDummyFile, "Menu", menuDummyFile)
-            popupItems.add(menuMapItem)
-
-            // Add all the map items from the view model
-            mapsViewModel.maps.value?.let { maps ->
-                popupItems.addAll(maps)
-            }
-
-            // Create and configure the PopupWindow
             val popupWindow = PopupWindow(
                 popupView,
                 ViewGroup.LayoutParams.WRAP_CONTENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT,
-                true // Makes the popup focusable
+                true
             )
 
-            // Set up the adapter and click listener
-            val adapter = PopupMapAdapter(popupItems) { selectedMapItem ->
-                if (selectedMapItem.name == "Menu") {
-                    findNavController().navigate(R.id.action_mapFragment_to_mainMenuFragment)
-                } else {
-                    mapsLayerManager.loadMapStyleFromFile(selectedMapItem.file) { style ->
+            val adapter = PopupMapAdapter(popupItems) { selectedItem ->
+                when (selectedItem) {
+                    is PopupItem.Menu -> findNavController().navigate(R.id.action_mapFragment_to_mainMenuFragment)
+                    is PopupItem.Map -> mapsLayerManager.loadMapStyleFromFile(selectedItem.mapItem.file) { style ->
                         placemarkLayerManager.onStyleLoaded(style)
                         gasLayerManager.onStyleLoaded(style)
                     }
                 }
-                popupWindow.dismiss() // Dismiss the popup on click
+                popupWindow.dismiss()
             }
 
             recyclerView.layoutManager = LinearLayoutManager(context)
@@ -243,9 +237,7 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
                         ColorStateList.valueOf(Color.parseColor("#757575")) // default grey
                     }
                     fabToggleGasLayer?.backgroundTintList = tint
-                    fabToggleGasLayer?.imageTintList = ColorStateList.valueOf(
-                        if (isVisible) Color.WHITE else Color.WHITE
-                    )
+                    fabToggleGasLayer?.imageTintList = ColorStateList.valueOf(Color.WHITE)
                 }
             }
         }
@@ -269,7 +261,7 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         val scaleBarPlugin = org.maplibre.android.plugins.scalebar.ScaleBarPlugin(mapView, map)
         val scaleBarOptions = org.maplibre.android.plugins.scalebar.ScaleBarOptions(requireContext())
         scaleBarOptions
-            .setTextColor(android.graphics.Color.BLACK)
+            .setTextColor(android.R.color.black)
             .setTextSize(44f)
             .setBarHeight(4f)
             .setBorderWidth(1f)
@@ -338,10 +330,11 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
             gasLayerManager.onStyleLoaded(style)
             trackLayerManager.setupTrackLayer(style)
 
-            if (initialPlacemarkLat != 999.0F && initialPlacemarkLng != 999.0F) {
+            val lat = initialPlacemarkLat
+            val lng = initialPlacemarkLng
+            if (lat != null && lng != null) {
                 isLocationLoaded = true
-                val targetLatLng =
-                    LatLng(initialPlacemarkLat.toDouble(), initialPlacemarkLng.toDouble())
+                val targetLatLng = LatLng(lat.toDouble(), lng.toDouble())
                 val cameraPosition = CameraPosition.Builder()
                     .target(targetLatLng)
                     .zoom(13.0)
@@ -396,11 +389,6 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         viewLifecycleOwner.lifecycleScope.launch {
             navigationViewModel.navigationState.collectLatest { navState ->
                 updateNavigationUi(navState)
-            }
-            navigationViewModel.lastKnownGpsLocation.collectLatest { location ->
-                if (location != null) {
-                    updateCurrentLocationIndicatorAndCamera(location)
-                }
             }
         }
         viewLifecycleOwner.lifecycleScope.launch {
@@ -465,8 +453,8 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
                 zoom = navigationViewModel.zoomLevel.value
             }
             isLocationLoaded = true
-            val lat = if (location.latitude == 0.0) 56.292374 else location.latitude
-            val lng = if (location.longitude == 0.0) 43.985402 else location.longitude
+            val lat = if (location.latitude == 0.0) DEFAULT_LOCATION_LAT else location.latitude
+            val lng = if (location.longitude == 0.0) DEFAULT_LOCATION_LNG else location.longitude
             val currentLatLng = LatLng(lat, lng)
             val cameraBuilder = CameraPosition.Builder().target(currentLatLng)
                 .zoom(zoom)
@@ -572,6 +560,9 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         super.onDestroyView()
         map.removeOnMapLongClickListener(this)
         map.removeOnMapClickListener(this)
+        placemarkLayerManager.cleanup()
+        gasLayerManager.cleanup()
+        trackLayerManager.cleanup()
         isLocationLoaded = false
         if (::mapView.isInitialized) mapView.onDestroy()
     }
@@ -606,7 +597,6 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
             val coordinateText = "Lat: %.4f, Lng: %.4f".format(coords.latitude, coords.longitude)
             when (item.itemId) {
                 ID_MENU_NAVIGATE -> {
-                    // Toast.makeText(requireContext(), "'To' set: $coordinateText", Toast.LENGTH_SHORT).show()
                     Log.d(
                         "MapContextMenu",
                         "Navigate to point: $coordinateText : ${navigationViewModel.navigationState.value}"
@@ -620,7 +610,6 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
                 }
 
                 ID_MENU_ADD_PLACEMARK -> {
-                    // Toast.makeText(requireContext(), "'To' set: $coordinateText", Toast.LENGTH_SHORT).show()
                     Log.d("MapContextMenu", "add placemark")
                     placemarkLayerManager.showAddPlacemarkDialog(coords)
                     return true

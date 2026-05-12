@@ -33,28 +33,22 @@ class PlacemarksViewModel(application: Application) : AndroidViewModel(applicati
     private val _currentLocation = MutableStateFlow<Location?>(null)
 
     val displayItems: StateFlow<List<PlacemarkDisplayItem>> =
-        rawPlacemarks.combine(_currentLocation) { placemarks, location ->
-            val mappedItems = placemarks.map { placemark ->
-                val distanceResult = PlacemarkUtils.calculateDistance(location, placemark)
-                PlacemarkDisplayItem(placemark, distanceResult.distanceString, distanceResult.distanceInMeters)
-            }
-            // Sort the items
-            mappedItems.sortedWith(compareBy {
-                if (it.distanceInMeters == null) Float.MAX_VALUE else it.distanceInMeters
-            })
-        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+        rawPlacemarks.combine(_currentLocation, ::toSortedDisplayItems)
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val gasStationItems: StateFlow<List<PlacemarkDisplayItem>> =
-        rawGasStations.combine(_currentLocation) { placemarks, location ->
-            val mappedItems = placemarks.map { placemark ->
-                val distanceResult = PlacemarkUtils.calculateDistance(location, placemark)
-                PlacemarkDisplayItem(placemark, distanceResult.distanceString, distanceResult.distanceInMeters)
-            }
-            // Sort the items
-            mappedItems.sortedWith(compareBy {
-                if (it.distanceInMeters == null) Float.MAX_VALUE else it.distanceInMeters
-            })
-        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+        rawGasStations.combine(_currentLocation, ::toSortedDisplayItems)
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    private fun toSortedDisplayItems(
+        placemarks: List<Placemark>,
+        location: Location?
+    ): List<PlacemarkDisplayItem> = placemarks
+        .map { placemark ->
+            val distanceResult = PlacemarkUtils.calculateDistance(location, placemark)
+            PlacemarkDisplayItem(placemark, distanceResult.distanceString, distanceResult.distanceInMeters)
+        }
+        .sortedBy { it.distanceInMeters ?: Float.MAX_VALUE }
 
     fun updateCurrentLocation(location: Location?) {
         _currentLocation.value = location
@@ -83,7 +77,11 @@ class PlacemarksViewModel(application: Application) : AndroidViewModel(applicati
         app.startService(serviceIntent)
     }
     fun deletePlacemark(id: String) {
-        Log.d("PlacemarksViewModel", "Deleting placemark with ID: $id")
+        val serviceIntent = Intent(app, PlacemarkService::class.java).apply {
+            action = PlacemarkService.ACTION_DELETE_PLACEMARK
+            putExtra(PlacemarkService.EXTRA_PLACEMARK, id)
+        }
+        app.startService(serviceIntent)
     }
 
     suspend fun importPlacemarksFromUri(uri: Uri): Boolean {

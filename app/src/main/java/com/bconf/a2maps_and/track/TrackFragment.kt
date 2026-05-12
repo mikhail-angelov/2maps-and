@@ -11,8 +11,12 @@ import androidx.appcompat.app.AlertDialog
 import androidx.core.content.FileProvider
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.RecyclerView
+import kotlinx.coroutines.launch
 import com.bconf.a2maps_and.R
 import java.io.File
 
@@ -40,15 +44,18 @@ class TrackFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-        trackViewModel.tracks.observe(viewLifecycleOwner) { tracks ->
-            if (tracks.isNullOrEmpty()) {
-                tracksRecyclerView.visibility = View.GONE
-                noTracksTextView.visibility = View.VISIBLE
-            } else {
-                tracksRecyclerView.visibility = View.VISIBLE
-                noTracksTextView.visibility = View.GONE
-                // Update the adapter with the new list
-                trackAdapter.updateTracks(tracks)
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                trackViewModel.tracks.collect { tracks ->
+                    if (tracks.isEmpty()) {
+                        tracksRecyclerView.visibility = View.GONE
+                        noTracksTextView.visibility = View.VISIBLE
+                    } else {
+                        tracksRecyclerView.visibility = View.VISIBLE
+                        noTracksTextView.visibility = View.GONE
+                        trackAdapter.updateTracks(tracks)
+                    }
+                }
             }
         }
     }

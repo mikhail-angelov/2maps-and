@@ -7,6 +7,8 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import org.maplibre.android.geometry.LatLng
@@ -19,7 +21,6 @@ import org.maplibre.android.style.layers.SymbolLayer
 import org.maplibre.android.style.sources.GeoJsonSource
 import org.maplibre.geojson.Feature
 import org.maplibre.geojson.FeatureCollection
-import org.maplibre.geojson.Point
 
 class GasLayerManager(
     private val context: Context,
@@ -28,6 +29,8 @@ class GasLayerManager(
     private val lifecycle: Lifecycle,
     private val onGasStationClickListener: (String) -> Unit
 ) {
+
+    private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
     companion object {
         private const val SOURCE_ID = "gas-stations-source"
@@ -49,7 +52,7 @@ class GasLayerManager(
     }
 
     private fun observeVisibility() {
-        CoroutineScope(Dispatchers.Main).launch {
+        scope.launch {
             lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 placemarksViewModel.isGasLayerVisible.collectLatest { isVisible ->
                     Log.d("GasLayerManager", "Gas layer visibility changed to: $isVisible")
@@ -65,10 +68,7 @@ class GasLayerManager(
 
 
     private fun observeGasStations() {
-        // Launch a coroutine that is automatically cancelled when the passed lifecycle is destroyed.
-        // We use lifecycle.repeatOnLifecycle to ensure collection only happens when the
-        // lifecycle is at least in the STARTED state.
-        CoroutineScope(Dispatchers.Main).launch { // Or use a scope provided if this class has its own lifecycle
+        scope.launch {
             lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 placemarksViewModel.gasStationItems.collectLatest { gasStations ->
                     Log.d(
@@ -147,89 +147,9 @@ class GasLayerManager(
     }
 
     fun updateGasStations(gasStations: List<PlacemarkDisplayItem>) {
-        Log.d("GasLayerManager", "Fetched ${gasStations.size} gas stations from service.")
-
-        if (gasStations.isEmpty()) {
-            Log.w("GasLayerManager", "No gas stations to display.")
-            // Ensure the source is cleared if there are no gas stations
-            map.getStyle { style ->
-                val source = style.getSourceAs<GeoJsonSource>(SOURCE_ID)
-                source?.setGeoJson(FeatureCollection.fromFeatures(emptyList())) // Clear the source
-            }
-            return // Exit early
-        }
-
-        val features: List<Feature> = gasStations.mapNotNull { p -> // Use mapNotNull
-            val placemark = p.placemark
-            try {
-                // Ensure longitude and latitude are valid numbers
-                if (placemark.longitude.isNaN() || placemark.latitude.isNaN()) {
-                    Log.e(
-                        "GasLayerManager",
-                        "Invalid coordinates for gas station: ${placemark.name} - Lat: ${placemark.latitude}, Lng: ${placemark.longitude}"
-                    )
-                    return@mapNotNull null
-                }
-                val point = Point.fromLngLat(placemark.longitude, placemark.latitude)
-                val feature = Feature.fromGeometry(point)
-                feature.addStringProperty(PROPERTY_ID, placemark.id)
-                feature.addStringProperty(
-                    PROPERTY_NAME,
-                    placemark.name ?: "Unnamed"
-                ) // Handle null name
-                feature.addStringProperty(PROPERTY_DESCRIPTION, placemark.description ?: "")
-                feature.addNumberProperty(PROPERTY_RATE, placemark.rate ?: 0)
-                feature // Return the valid feature
-            } catch (e: Exception) {
-                Log.e(
-                    "GasLayerManager",
-                    "Error creating feature for gas station: ${placemark.name}",
-                    e
-                )
-                null // Skip this gas station if there's an error
-            }
-        }
-
-        Log.d("GasLayerManager", "Number of features created: ${features.size}")
-        if (features.isEmpty() && gasStations.isNotEmpty()) {
-            Log.e(
-                "GasLayerManager",
-                "All gas stations resulted in invalid features. Check for coordinate or property errors."
-            )
-            // Clear the source if all features failed
-            map.getStyle { style ->
-                val source = style.getSourceAs<GeoJsonSource>(SOURCE_ID)
-                source?.setGeoJson(FeatureCollection.fromFeatures(emptyList()))
-            }
-            return
-        }
-        // Log individual features if the list is small
-        features.forEachIndexed { index, feature ->
-            Log.d("GasLayerManager", "Feature $index: ${feature.toJson()}")
-        }
-
-        val featureCollection: FeatureCollection = FeatureCollection.fromFeatures(features)
-        Log.d(
-            "GasLayerManager",
-            "FeatureCollection JSON: ${featureCollection.toJson()}"
-        )
-
+        val featureCollection = buildFeatureCollection(gasStations, "GasLayerManager")
         map.getStyle { style ->
-            val source = style.getSourceAs<GeoJsonSource>(SOURCE_ID)
-            if (source == null) {
-                Log.e("GasLayerManager", "GeoJsonSource with ID '$SOURCE_ID' not found!")
-                return@getStyle
-            }
-            try {
-                source.setGeoJson(featureCollection)
-                Log.d("GasLayerManager", "GeoJsonSource updated successfully.")
-            } catch (e: Exception) {
-                Log.e(
-                    "GasLayerManager",
-                    "Exception during source.setGeoJson()",
-                    e
-                )
-            }
+            style.getSourceAs<GeoJsonSource>(SOURCE_ID)?.setGeoJson(featureCollection)
         }
     }
 
@@ -243,6 +163,7 @@ class GasLayerManager(
     }
 
     fun cleanup() {
+        scope.cancel()
         map.getStyle { style ->
             if (style.isFullyLoaded) {
                 style.removeLayer(CIRCLE_LAYER_ID)

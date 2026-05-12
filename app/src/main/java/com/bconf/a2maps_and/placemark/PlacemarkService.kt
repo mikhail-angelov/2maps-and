@@ -109,6 +109,12 @@ class PlacemarkService : Service() {
                 }
             }
 
+            ACTION_DELETE_PLACEMARK -> {
+                intent.getStringExtra(EXTRA_PLACEMARK)?.let { id ->
+                    deletePlacemark(id)
+                }
+            }
+
             ACTION_IMPORT_PLACEMARKS_FROM_URI -> {
                 intent.data?.let { uri ->
                     serviceScope.launch {
