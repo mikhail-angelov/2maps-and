@@ -14,7 +14,6 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.animation.AccelerateDecelerateInterpolator
 import android.widget.PopupWindow
-import android.widget.Toast
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.Lifecycle
@@ -244,7 +243,7 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         val scaleBarOptions = ScaleBarOptions(requireContext())
         scaleBarOptions
             .setTextColor(android.R.color.black)
-            .setTextSize(44f)
+            .setTextSize(32f)
             .setBarHeight(4f)
             .setBorderWidth(1f)
             .setRefreshInterval(15)

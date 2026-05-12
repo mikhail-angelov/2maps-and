@@ -154,20 +154,14 @@ class PlacemarkLayerManager(
             Log.d("PlacemarkManager", "Setting up CircleLayer: $CIRCLE_LAYER_ID") // <--- ADD THIS
             val circleLayer = CircleLayer(CIRCLE_LAYER_ID, SOURCE_ID)
                 .withProperties(
-                    PropertyFactory.circleColor(Color.GREEN), // Set circle color to green
-                    PropertyFactory.circleRadius(8f),       // Set circle radius (in pixels)
-                    PropertyFactory.circleStrokeColor(Color.BLACK), // Optional: circle stroke color
-                    PropertyFactory.circleStrokeWidth(1.5f)    // Optional: circle stroke width
-                    // Add other circle properties as needed:
-                    // PropertyFactory.circleOpacity(0.8f),
-                    // PropertyFactory.circleBlur(0.5f)
+                    PropertyFactory.circleColor(Color.GREEN),
+                    PropertyFactory.circleRadius(5f),
+                    PropertyFactory.circleStrokeColor(Color.BLACK),
+                    PropertyFactory.circleStrokeWidth(1f)
                 )
             style.addLayer(circleLayer)
         } else {
-            Log.d(
-                "PlacemarkManager",
-                "CircleLayer $CIRCLE_LAYER_ID already exists."
-            ) // <--- ADD THIS
+            Log.d("PlacemarkManager", "CircleLayer $CIRCLE_LAYER_ID already exists.")
         }
     }
 
@@ -176,21 +170,17 @@ class PlacemarkLayerManager(
             val textLayer = SymbolLayer(TEXT_LAYER_ID, SOURCE_ID)
                 .withProperties(
                     PropertyFactory.textField("{$PROPERTY_NAME}"),
-                    PropertyFactory.textFont(arrayOf("Arial Unicode Regular")), // [1] Standard font stack
+                    PropertyFactory.textFont(arrayOf("Arial Unicode Regular")),
                     PropertyFactory.textColor(Color.BLACK),
                     PropertyFactory.textHaloColor(Color.WHITE),
                     PropertyFactory.textHaloWidth(1.0f),
                     PropertyFactory.textSize(14f),
-                    PropertyFactory.textAnchor(Property.TEXT_ANCHOR_BOTTOM), // Anchor text above the circle's center
-                    PropertyFactory.textOffset(
-                        arrayOf(
-                            0f,
-                            2f
-                        )
-                    ), // Offset text slightly above the circle
-                    PropertyFactory.textAllowOverlap(true), // Avoid text disappearing if circles are close
+                    PropertyFactory.textAnchor(Property.TEXT_ANCHOR_BOTTOM),
+                    PropertyFactory.textOffset(arrayOf(0f, 2f)),
+                    PropertyFactory.textAllowOverlap(true),
                     PropertyFactory.textIgnorePlacement(true)
                 )
+            textLayer.minZoom = 12f
             style.addLayer(textLayer)
         }
     }

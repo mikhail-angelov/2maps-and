@@ -2,6 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <!--suppress ForegroundServicePermission,AndroidLintForegroundServicePermission -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"
         tools:ignore="ForegroundServicePermission,ForegroundServiceType" />
     <!-- FOREGROUND_SERVICE_LOCATION is required on API 34+ alongside the service's foregroundServiceType -->
