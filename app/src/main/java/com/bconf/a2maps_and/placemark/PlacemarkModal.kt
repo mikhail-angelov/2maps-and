@@ -22,12 +22,9 @@ import androidx.navigation.fragment.findNavController
 import com.bconf.a2maps_and.R
 import com.bconf.a2maps_and.databinding.BottomSheetPlacemarkBinding
 import com.bconf.a2maps_and.navigation.NavigationChooser
-import com.bconf.a2maps_and.navigation.NavigationViewModel
-import com.bconf.a2maps_and.utils.PlacemarkUtils
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
-import org.maplibre.android.geometry.LatLng
 
 class PlacemarkModal : BottomSheetDialogFragment() {
 
@@ -36,7 +33,6 @@ class PlacemarkModal : BottomSheetDialogFragment() {
 
     // Use activityViewModels to share the ViewModel with the hosting fragments
     private val placemarkViewModel: PlacemarksViewModel by activityViewModels()
-    private val navigationViewModel: NavigationViewModel by activityViewModels()
 
     private var placemarkId: String? = null
 
@@ -71,54 +67,50 @@ class PlacemarkModal : BottomSheetDialogFragment() {
         // This ensures the UI updates if the data changes while the modal is visible.
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                navigationViewModel.lastKnownGpsLocation.collectLatest { location ->
-                    placemarkViewModel.displayItems.collectLatest { displayItems ->
-                        if (displayItems.isEmpty()) {
-                            Log.w(
-                                "PlacemarkModal",
-                                "displayItems flow is empty, cannot find placemark."
-                            )
-                            return@collectLatest
-                        }
-
-                        Log.d(
+                placemarkViewModel.displayItems.collectLatest { displayItems ->
+                    if (displayItems.isEmpty()) {
+                        Log.w(
                             "PlacemarkModal",
-                            "Observing ${displayItems.size} items. Searching for ID: $placemarkId"
+                            "displayItems flow is empty, cannot find placemark."
                         )
-                        val displayItem = displayItems.find { it.placemark.id == placemarkId }
-
-                        if (displayItem == null) {
-                            Log.e(
-                                "PlacemarkModal",
-                                "Placemark with ID '$placemarkId' not found in displayItems."
-                            )
-                            // Optional: show an error message or dismiss the modal
-                            Toast.makeText(
-                                requireContext(),
-                                "Placemark not found",
-                                Toast.LENGTH_SHORT
-                            ).show()
-                            dismiss()
-                            return@collectLatest
-                        }
-
-                        bindPlacemarkDetails(displayItem,location)
+                        return@collectLatest
                     }
+
+                    Log.d(
+                        "PlacemarkModal",
+                        "Observing ${displayItems.size} items. Searching for ID: $placemarkId"
+                    )
+                    val displayItem = displayItems.find { it.placemark.id == placemarkId }
+
+                    if (displayItem == null) {
+                        Log.e(
+                            "PlacemarkModal",
+                            "Placemark with ID '$placemarkId' not found in displayItems."
+                        )
+                        Toast.makeText(
+                            requireContext(),
+                            "Placemark not found",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                        dismiss()
+                        return@collectLatest
+                    }
+
+                    bindPlacemarkDetails(displayItem)
                 }
             }
         }
     }
 
-    private fun bindPlacemarkDetails(item: PlacemarkDisplayItem, location: android.location.Location?) {
+    private fun bindPlacemarkDetails(item: PlacemarkDisplayItem) {
         val placemark = item.placemark
         Log.d(
             "PlacemarkModal",
             "Binding details for ${placemark.name}: ${item.distanceString}/${item.distanceInMeters}"
         )
         binding.placemarkName.text = placemark.name
-        binding.placemarkRating.rating = placemark.rate?.toFloat() ?: 0f // Set the rating stars
-        val distanceResult = PlacemarkUtils.calculateDistance(location, placemark)
-        binding.placemarkDistance.text = distanceResult.distanceString
+        binding.placemarkRating.rating = placemark.rate?.toFloat() ?: 0f
+        binding.placemarkDistance.text = item.distanceString
 
         if (placemark.description.isNullOrBlank()) {
             binding.placemarkDescription.isVisible = false
@@ -128,13 +120,7 @@ class PlacemarkModal : BottomSheetDialogFragment() {
         }
 
         binding.navigateButton.setOnClickListener {
-            NavigationChooser.show(requireContext(), placemark.latitude, placemark.longitude) {
-                if (findNavController().currentDestination?.id != R.id.mapFragment) {
-                    findNavController().navigate(R.id.mapFragment)
-                }
-                navigationViewModel.requestNavigationTo(LatLng(placemark.latitude, placemark.longitude))
-                dismiss()
-            }
+            NavigationChooser.show(requireContext(), placemark.latitude, placemark.longitude)
         }
         binding.shareButton.setOnClickListener {
             val lat = placemark.latitude

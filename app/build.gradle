@@ -4,12 +4,6 @@ plugins {
     id 'androidx.navigation.safeargs.kotlin'
 }
 
-def localProperties = new Properties()
-def localPropertiesFile = rootProject.file("local.properties")
-if (localPropertiesFile.exists()) {
-    localProperties.load(new FileInputStream(localPropertiesFile))
-}
-
 android {
     namespace 'com.bconf.a2maps_and'
     compileSdk 36
@@ -23,9 +17,6 @@ android {
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
 
-        // Make the property from local.properties available in your code
-        // Note the escaped quotes for the string value
-        buildConfigField("String", "VALHALLA_BASE_URL", "\"${localProperties.getProperty('valhalla.baseUrl', '')}\"")
     }
 
     signingConfigs {
@@ -41,7 +32,6 @@ android {
 
     buildFeatures {
         viewBinding true
-        buildConfig true // Explicitly enable buildConfig
     }
 
     buildTypes {
@@ -75,15 +65,10 @@ dependencies {
     implementation 'com.google.android.gms:play-services-location:21.2.0'
     implementation 'com.huawei.hms:location:6.12.0.300'
 
-    // Retrofit for networking
+    // Networking (used by auth)
     implementation 'com.squareup.retrofit2:retrofit:2.9.0'
     implementation 'com.squareup.retrofit2:converter-gson:2.9.0'
     implementation 'com.squareup.okhttp3:logging-interceptor:4.9.3'
-
-    // Map Utilities
-    implementation 'com.google.maps.android:android-maps-utils:2.3.0' // For PolyUtil
-    implementation 'com.mapbox.mapboxsdk:mapbox-sdk-geojson:7.7.0'
-    implementation 'com.mapbox.mapboxsdk:mapbox-sdk-turf:7.7.0'
 
     // Scale bar plugin
     implementation 'org.maplibre.gl:android-plugin-scalebar-v9:3.0.2'

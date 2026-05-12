@@ -3,15 +3,12 @@ package com.bconf.a2maps_and.maps
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.graphics.Color
-import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.Style
 import org.maplibre.android.style.layers.CircleLayer
-import org.maplibre.android.style.layers.LineLayer
 import org.maplibre.android.style.layers.Property
 import org.maplibre.android.style.layers.PropertyFactory
 import org.maplibre.android.style.sources.GeoJsonSource
-import org.maplibre.geojson.LineString
 import org.maplibre.geojson.Point
 import java.io.File
 import java.io.IOException
@@ -19,13 +16,10 @@ import java.io.IOException
 class MapsLayerManager(private val context: Context, private val map: MapLibreMap) {
 
     private var currentLocationSource: GeoJsonSource? = null
-    private var routeSource: GeoJsonSource? = null
 
     companion object {
         private const val CURRENT_LOCATION_SOURCE_ID = "current-location-source"
         private const val CURRENT_LOCATION_LAYER_ID = "current-location-layer"
-        private const val ROUTE_SOURCE_ID = "route-source"
-        private const val ROUTE_LAYER_ID = "route-layer"
     }
 
     fun loadInitialMapStyle(onStyleLoaded: ((style: Style) -> Unit)) {
@@ -130,7 +124,6 @@ class MapsLayerManager(private val context: Context, private val map: MapLibreMa
             onStyleLoaded?.invoke(style)
 
             setupLocationDisplay(style)
-            setupRouteLayer(style)
         }
     }
 
@@ -151,57 +144,7 @@ class MapsLayerManager(private val context: Context, private val map: MapLibreMa
         style.addLayer(locationLayer)
     }
 
-    private fun setupRouteLayer(style: Style) {
-        routeSource = GeoJsonSource(ROUTE_SOURCE_ID)
-        style.addSource(routeSource!!)
-        val routeLayer = LineLayer(ROUTE_LAYER_ID, ROUTE_SOURCE_ID)
-        routeLayer.setProperties(
-            PropertyFactory.lineColor(Color.parseColor("#FF3887BE")),
-            PropertyFactory.lineWidth(5f),
-            PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
-            PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND)
-        )
-        // Ensure route layer is under the location indicator
-        style.addLayerBelow(routeLayer, CURRENT_LOCATION_LAYER_ID)
-
-    }
-
-
     fun updateCurrentLocation(point: Point) {
         currentLocationSource?.setGeoJson(point)
-    }
-
-    fun drawRoute(routeSegment: List<LatLng>?) {
-        if (routeSegment == null || routeSegment.isEmpty()) {
-            clearRoute()
-            return
-        }
-
-
-        map.getStyle { style -> // Ensure working with current style
-            val lineString = LineString.fromLngLats(routeSegment.map {
-                Point.fromLngLat(it.longitude, it.latitude)
-            })
-            if (routeSource == null) {
-                routeSource = GeoJsonSource(ROUTE_SOURCE_ID, lineString)
-                style.addSource(routeSource!!)
-                val routeLayer = LineLayer(ROUTE_LAYER_ID, ROUTE_SOURCE_ID).apply {
-                    setProperties(
-                        PropertyFactory.lineColor(Color.parseColor("#FF3887BE")),
-                        PropertyFactory.lineWidth(5f),
-                        PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
-                        PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND)
-                    )
-                }
-                style.addLayerBelow(routeLayer, CURRENT_LOCATION_LAYER_ID)
-            } else {
-                routeSource?.setGeoJson(lineString)
-            }
-        }
-    }
-
-    fun clearRoute() {
-        // To clear the route, we can set an empty LineString
-        routeSource?.setGeoJson(LineString.fromLngLats(emptyList()))
     }
 }

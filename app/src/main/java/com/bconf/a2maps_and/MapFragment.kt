@@ -13,14 +13,11 @@ import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
 import android.view.animation.AccelerateDecelerateInterpolator
-import android.widget.ImageButton
 import android.widget.PopupWindow
-import android.widget.TextView
 import android.widget.Toast
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.flowWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
@@ -33,7 +30,6 @@ import com.bconf.a2maps_and.maps.PopupItem
 import com.bconf.a2maps_and.maps.PopupMapAdapter
 import com.bconf.a2maps_and.navigation.CenterOnLocationState
 import com.bconf.a2maps_and.navigation.NavigationChooser
-import com.bconf.a2maps_and.navigation.NavigationState
 import com.bconf.a2maps_and.navigation.NavigationViewModel
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import com.bconf.a2maps_and.placemark.GasLayerManager
@@ -43,9 +39,7 @@ import com.bconf.a2maps_and.placemark.PlacemarksViewModel
 import com.bconf.a2maps_and.track.TrackLayerManager
 import com.bconf.a2maps_and.track.TrackViewModel
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.flow.onEach
 import org.maplibre.android.MapLibre
 import org.maplibre.android.plugins.scalebar.ScaleBarOptions
 import org.maplibre.android.plugins.scalebar.ScaleBarPlugin
@@ -86,11 +80,6 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
     private var isRadialMenuOpen = false
     private val radialMenuAnimDuration = 200L
     private var isUserPanning = false
-    private var maneuverTextViewInFragment: TextView? = null
-    private var navigationInfoPanel: View? = null
-    private var remainingDistanceTextView: TextView? = null
-    private var stopNavigationButton: ImageButton? = null
-    private var rerouteButton: ImageButton? = null
     private var mainMenuButton: FloatingActionButton? = null
     private val args: MapFragmentArgs by navArgs()
 
@@ -123,11 +112,6 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         mapView = view.findViewById(R.id.mapViewInFragment)
         mapView.onCreate(savedInstanceState)
         mapView.getMapAsync(this)
-        maneuverTextViewInFragment = view.findViewById(R.id.mapFragmentManeuverTextView)
-        navigationInfoPanel = view.findViewById(R.id.navigationInfoPanel)
-        remainingDistanceTextView = view.findViewById(R.id.remainingDistanceTextView)
-        stopNavigationButton = view.findViewById(R.id.stopNavigationButton)
-        rerouteButton = view.findViewById(R.id.rerouteButton)
         fabCenterOnLocation = view.findViewById(R.id.fabCenterOnLocationInFragment)
         fabHideTrack = view.findViewById(R.id.fabHideTrack)
         fabToggleGasLayer = view.findViewById(R.id.fabToggleGasLayer)
@@ -171,13 +155,6 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         }
 
 
-        rerouteButton?.setOnClickListener {
-            navigationViewModel.recalculateRoute()
-        }
-        stopNavigationButton?.setOnClickListener {
-            navigationViewModel.stopNavigation()
-            mapsLayerManager.clearRoute()
-        }
         fabCenterOnLocation?.setOnClickListener {
             isUserPanning = false
             if (isRadialMenuOpen) {
@@ -350,49 +327,11 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
             }
         })
 
-        navigationViewModel.uiEvents
-            .flowWithLifecycle(
-                viewLifecycleOwner.lifecycle,
-                Lifecycle.State.STARTED
-            )
-            .onEach { event ->
-                when (event) {
-                    is NavigationViewModel.UiEvent.ShowToast -> {
-                        showCustomToast(event.message, event.isError)
-                    }
-                }
-            }
-            .launchIn(viewLifecycleOwner.lifecycleScope)
-
-
         viewLifecycleOwner.lifecycleScope.launch {
             navigationViewModel.lastKnownGpsLocation.collectLatest { location ->
                 if (location != null) {
                     updateCurrentLocationIndicatorAndCamera(location)
                 }
-            }
-        }
-        viewLifecycleOwner.lifecycleScope.launch {
-            navigationViewModel.currentDisplayedPath.collectLatest { pathSegment ->
-                mapsLayerManager.drawRoute(pathSegment)
-            }
-        }
-        viewLifecycleOwner.lifecycleScope.launch {
-            navigationViewModel.maneuverText.collectLatest { text ->
-                maneuverTextViewInFragment?.text = text
-                updateNavigationUi(navigationViewModel.navigationState.value)
-            }
-        }
-
-        viewLifecycleOwner.lifecycleScope.launch {
-            navigationViewModel.remainingDistance.collectLatest { distanceText ->
-                remainingDistanceTextView?.text = distanceText
-            }
-        }
-
-        viewLifecycleOwner.lifecycleScope.launch {
-            navigationViewModel.navigationState.collectLatest { navState ->
-                updateNavigationUi(navState)
             }
         }
         viewLifecycleOwner.lifecycleScope.launch {
@@ -506,29 +445,6 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         toast.show()
     }
 
-    private fun updateNavigationUi(navState: NavigationState) {
-        val isNavigatingOrOffRoute =
-            navState != NavigationState.IDLE
-
-        navigationInfoPanel?.visibility = if (isNavigatingOrOffRoute) View.VISIBLE else View.GONE
-        rerouteButton?.visibility =
-            if (navState == NavigationState.OFF_ROUTE || navState == NavigationState.ROUTE_CALCULATION_FAILED) View.VISIBLE else View.GONE
-
-        val maneuverText = maneuverTextViewInFragment?.text
-        if (isNavigatingOrOffRoute && !maneuverText.isNullOrBlank()) {
-            maneuverTextViewInFragment?.visibility = View.VISIBLE
-        } else {
-            maneuverTextViewInFragment?.visibility = View.GONE
-        }
-        val showStandardFabs = !isNavigatingOrOffRoute
-        fabCenterOnLocation?.visibility = if (showStandardFabs) View.VISIBLE else View.GONE
-        if (!showStandardFabs) {
-            closeRadialMenu()
-        }
-        mainMenuButton?.visibility = if (showStandardFabs) View.VISIBLE else View.GONE
-        fabToggleGasLayer?.visibility = if (showStandardFabs) View.VISIBLE else View.GONE
-    }
-
 
     override fun onStart() {
         super.onStart()
@@ -600,12 +516,7 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         longPressedLatLng?.let { coords ->
             when (item.itemId) {
                 ID_MENU_NAVIGATE -> {
-                    NavigationChooser.show(requireContext(), coords.latitude, coords.longitude) {
-                        if (navigationViewModel.navigationState.value != NavigationState.IDLE) {
-                            navigationViewModel.stopNavigation()
-                        }
-                        navigationViewModel.requestNavigationTo(coords)
-                    }
+                    NavigationChooser.show(requireContext(), coords.latitude, coords.longitude)
                     return true
                 }
 
@@ -673,9 +584,6 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
 
         isRadialMenuOpen = false
 
-        // Restore gas layer button visibility after closing
-        val navState = navigationViewModel.navigationState.value
-        val showStandardFabs = navState == NavigationState.IDLE
-        fabToggleGasLayer?.visibility = if (showStandardFabs) View.VISIBLE else View.GONE
+        fabToggleGasLayer?.visibility = View.VISIBLE
     }
 }

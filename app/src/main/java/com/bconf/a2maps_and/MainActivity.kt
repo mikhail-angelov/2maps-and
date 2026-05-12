@@ -12,30 +12,22 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.Toolbar
 import androidx.core.app.ActivityCompat
-import androidx.lifecycle.ViewModelProvider
-import androidx.lifecycle.lifecycleScope
 import androidx.navigation.NavController
 import androidx.navigation.fragment.NavHostFragment
 import androidx.navigation.ui.AppBarConfiguration
 import androidx.navigation.ui.NavigationUI
 import com.bconf.a2maps_and.auth.AuthRepository
 import com.bconf.a2maps_and.navigation.NavigationEngineService
-import com.bconf.a2maps_and.navigation.NavigationState
-import com.bconf.a2maps_and.navigation.NavigationViewModel
 import com.bconf.a2maps_and.placemark.PlacemarkService
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
 
-    private lateinit var navigationViewModel: NavigationViewModel
     private lateinit var navController: NavController
     private lateinit var appBarConfiguration: AppBarConfiguration
     private lateinit var toolbar: Toolbar // Make Toolbar a class variable
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        navigationViewModel = ViewModelProvider(this).get(NavigationViewModel::class.java)
         AuthRepository.init(this)
         setContentView(R.layout.activity_main)
 
@@ -64,7 +56,6 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        observeViewModel()
     }
 
     override fun onSupportNavigateUp(): Boolean {
@@ -75,30 +66,6 @@ class MainActivity : AppCompatActivity() {
         ) || super.onSupportNavigateUp()
     }
 
-    private fun observeViewModel() {
-
-        lifecycleScope.launch {
-            navigationViewModel.navigationState.collectLatest { state ->
-                Log.d("MainActivity", "VM Navigation State Changed: $state")
-                // ... (handle UI changes based on state: Toasts, button visibility etc.)
-                if (state == NavigationState.ROUTE_CALCULATION) {
-                    Toast.makeText(this@MainActivity, "Requesting route...", Toast.LENGTH_LONG)
-                        .show()
-                } else if (state == NavigationState.OFF_ROUTE) {
-                    Toast.makeText(this@MainActivity, "You are off route!", Toast.LENGTH_LONG)
-                        .show()
-                } else if (state == NavigationState.ROUTE_CALCULATION_FAILED) {
-                    Toast.makeText(
-                        this@MainActivity,
-                        "Route calculation failed.",
-                        Toast.LENGTH_LONG
-                    ).show()
-                }
-            }
-        }
-
-    }
-
     private val requestLocationPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
             val fineLocationGranted =
@@ -107,20 +74,7 @@ class MainActivity : AppCompatActivity() {
                 permissions.getOrDefault(Manifest.permission.ACCESS_COARSE_LOCATION, false)
 
             if (fineLocationGranted || coarseLocationGranted) {
-                if (permissions.getOrDefault(
-                        Manifest.permission.ACCESS_BACKGROUND_LOCATION,
-                        false
-                    )
-                ) {
-                    startLocationService()
-                } else {
-                    Log.w("Location", "Background location permission denied.")
-                    Toast.makeText(
-                        this,
-                        "Background location permission is needed for full functionality.",
-                        Toast.LENGTH_LONG
-                    ).show()
-                }
+                startLocationService()
             } else {
                 Log.w("Location", "Location permission denied.")
                 Toast.makeText(
@@ -135,7 +89,6 @@ class MainActivity : AppCompatActivity() {
         val permissionsToRequest = mutableListOf<String>()
         permissionsToRequest.add(Manifest.permission.ACCESS_FINE_LOCATION)
         permissionsToRequest.add(Manifest.permission.ACCESS_COARSE_LOCATION)
-        permissionsToRequest.add(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
 
         val foregroundPermissionsGranted = ActivityCompat.checkSelfPermission(
             this,
