@@ -94,6 +94,8 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
     private var initialPlacemarkLng: Float? = null
     private var isLocationLoaded: Boolean = false
     private var lastUserInteractionTime: Long = 0
+    private var lastFollowCameraTarget: LatLng? = null
+    private var lastFollowCameraUpdateTime: Long = 0
     private var latestRecordedPath: List<LatLng> = emptyList()
 
     companion object {
@@ -109,6 +111,8 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         private const val LOCATION_CAMERA_ANIMATION_MS = 600
         private const val ROUTE_CAMERA_PADDING = 150
         private const val USER_INTERACTION_TIMEOUT_MS = 60 * 1000
+        private const val FOLLOW_CAMERA_MIN_INTERVAL_MS = 2_000L
+        private const val FOLLOW_CAMERA_MIN_DISTANCE_METERS = 25.0
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -457,16 +461,18 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         if (isUserPanning && (System.currentTimeMillis() - lastUserInteractionTime > USER_INTERACTION_TIMEOUT_MS)) {
             isUserPanning = false
         }
-        if (force || (state.shouldFollowLocation() && !isUserPanning) || !isLocationLoaded) {
+        val lat = if (location.latitude == 0.0) DEFAULT_LOCATION_LAT else location.latitude
+        val lng = if (location.longitude == 0.0) DEFAULT_LOCATION_LNG else location.longitude
+        val currentLatLng = LatLng(lat, lng)
+        if (force || !isLocationLoaded) {
             val zoom = when {
                 !isLocationLoaded -> locationViewModel.zoomLevel.value
                 force -> map.cameraPosition.zoom.coerceAtLeast(DEFAULT_FOCUS_ZOOM)
                 else -> map.cameraPosition.zoom
             }
             isLocationLoaded = true
-            val lat = if (location.latitude == 0.0) DEFAULT_LOCATION_LAT else location.latitude
-            val lng = if (location.longitude == 0.0) DEFAULT_LOCATION_LNG else location.longitude
-            val currentLatLng = LatLng(lat, lng)
+            lastFollowCameraTarget = currentLatLng
+            lastFollowCameraUpdateTime = System.currentTimeMillis()
             val cameraBuilder = CameraPosition.Builder().target(currentLatLng)
                 .zoom(zoom)
                 .padding(0.0, 0.0, 0.0, 0.0)
@@ -480,7 +486,30 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
                 CameraUpdateFactory.newCameraPosition(cameraBuilder.build()),
                 LOCATION_CAMERA_ANIMATION_MS
             )
+        } else if (state.shouldFollowLocation() && !isUserPanning && shouldUpdateFollowCamera(currentLatLng)) {
+            lastFollowCameraTarget = currentLatLng
+            lastFollowCameraUpdateTime = System.currentTimeMillis()
+            map.moveCamera(CameraUpdateFactory.newLatLng(currentLatLng))
         }
+    }
+
+    private fun shouldUpdateFollowCamera(target: LatLng): Boolean {
+        val lastTarget = lastFollowCameraTarget ?: return true
+        val now = System.currentTimeMillis()
+        if (now - lastFollowCameraUpdateTime < FOLLOW_CAMERA_MIN_INTERVAL_MS) return false
+        return distanceMeters(lastTarget, target) >= FOLLOW_CAMERA_MIN_DISTANCE_METERS
+    }
+
+    private fun distanceMeters(start: LatLng, end: LatLng): Double {
+        val results = FloatArray(1)
+        Location.distanceBetween(
+            start.latitude,
+            start.longitude,
+            end.latitude,
+            end.longitude,
+            results
+        )
+        return results[0].toDouble()
     }
 
     private fun updateCenterOnLocationFab(state: LocationMode) {
