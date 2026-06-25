@@ -83,6 +83,7 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
     private var fabRadialFollow: FloatingActionButton? = null
     private var fabRadialRecord: FloatingActionButton? = null
     private var fabRadialFollowRecord: FloatingActionButton? = null
+    private var fabCompass: FloatingActionButton? = null
     private var trackStatsText: TextView? = null
     private var isRadialMenuOpen = false
     private val radialMenuAnimDuration = 200L
@@ -96,6 +97,8 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
     private var lastUserInteractionTime: Long = 0
     private var lastFollowCameraTarget: LatLng? = null
     private var lastFollowCameraUpdateTime: Long = 0
+    private var lastBearingLocation: LatLng? = null
+    private var currentHeadingBearing: Double? = null
     private var latestRecordedPath: List<LatLng> = emptyList()
 
     companion object {
@@ -113,6 +116,8 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         private const val USER_INTERACTION_TIMEOUT_MS = 60 * 1000
         private const val FOLLOW_CAMERA_MIN_INTERVAL_MS = 2_000L
         private const val FOLLOW_CAMERA_MIN_DISTANCE_METERS = 25.0
+        private const val HEADING_MIN_DISTANCE_METERS = 8.0
+        private const val HEADING_MIN_CHANGE_DEGREES = 12.0
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -134,6 +139,7 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
             realMapView.getMapAsync(this)
         }
         setupMainMenuButton()
+        setupCompass()
         setupLocationControls()
         setupTrackControls()
         setupGasLayerControls()
@@ -155,6 +161,7 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         fabRadialFollow = view.findViewById(R.id.fabRadialFollow)
         fabRadialRecord = view.findViewById(R.id.fabRadialRecord)
         fabRadialFollowRecord = view.findViewById(R.id.fabRadialFollowRecord)
+        fabCompass = view.findViewById(R.id.fabCompass)
         mainMenuButton = view.findViewById(R.id.mainMenuButton)
         trackStatsText = view.findViewById(R.id.trackStatsText)
     }
@@ -192,6 +199,20 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
 
             // Show the popup window anchored to the button
             popupWindow.showAsDropDown(anchorView)
+        }
+    }
+
+    private fun setupCompass() {
+        fabCompass?.setOnClickListener {
+            if (!::map.isInitialized) return@setOnClickListener
+            val cameraPosition = CameraPosition.Builder(map.cameraPosition)
+                .bearing(0.0)
+                .build()
+            map.animateCamera(
+                CameraUpdateFactory.newCameraPosition(cameraPosition),
+                LOCATION_CAMERA_ANIMATION_MS
+            )
+            updateCompassRotation(0.0)
         }
     }
 
@@ -322,6 +343,7 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
             if (locationViewModel.zoomLevel.value != zoom) {
                 locationViewModel.setZoomLevel(zoom)
             }
+            updateCompassRotation(map.cameraPosition.bearing)
         }
         mapView.let { registerForContextMenu(it) }
     }
@@ -464,6 +486,7 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         val lat = if (location.latitude == 0.0) DEFAULT_LOCATION_LAT else location.latitude
         val lng = if (location.longitude == 0.0) DEFAULT_LOCATION_LNG else location.longitude
         val currentLatLng = LatLng(lat, lng)
+        updateHeadingBearing(currentLatLng)
         if (force || !isLocationLoaded) {
             val zoom = when {
                 !isLocationLoaded -> locationViewModel.zoomLevel.value
@@ -473,13 +496,14 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
             isLocationLoaded = true
             lastFollowCameraTarget = currentLatLng
             lastFollowCameraUpdateTime = System.currentTimeMillis()
+            val bearing = currentHeadingBearing ?: map.cameraPosition.bearing
             val cameraBuilder = CameraPosition.Builder().target(currentLatLng)
                 .zoom(zoom)
+                .bearing(bearing)
                 .padding(0.0, 0.0, 0.0, 0.0)
 
-            if (state.resetsCameraBearing()) {
+            if (!state.shouldFollowLocation()) {
                 cameraBuilder.tilt(0.0)
-                cameraBuilder.bearing(0.0)
             }
 
             map.animateCamera(
@@ -489,7 +513,30 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         } else if (state.shouldFollowLocation() && !isUserPanning && shouldUpdateFollowCamera(currentLatLng)) {
             lastFollowCameraTarget = currentLatLng
             lastFollowCameraUpdateTime = System.currentTimeMillis()
-            map.moveCamera(CameraUpdateFactory.newLatLng(currentLatLng))
+            val cameraPosition = CameraPosition.Builder(map.cameraPosition)
+                .target(currentLatLng)
+                .bearing(currentHeadingBearing ?: map.cameraPosition.bearing)
+                .build()
+            map.moveCamera(CameraUpdateFactory.newCameraPosition(cameraPosition))
+        }
+    }
+
+    private fun updateHeadingBearing(currentLocation: LatLng) {
+        val lastLocation = lastBearingLocation
+        if (lastLocation == null) {
+            lastBearingLocation = currentLocation
+            return
+        }
+        val movement = distanceAndBearing(lastLocation, currentLocation)
+        if (movement.distanceMeters < HEADING_MIN_DISTANCE_METERS) return
+        lastBearingLocation = currentLocation
+
+        val nextBearing = normalizeBearing(movement.bearingDegrees)
+        val currentBearing = currentHeadingBearing
+        if (currentBearing == null ||
+            bearingDeltaDegrees(currentBearing, nextBearing) >= HEADING_MIN_CHANGE_DEGREES
+        ) {
+            currentHeadingBearing = nextBearing
         }
     }
 
@@ -501,15 +548,36 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
     }
 
     private fun distanceMeters(start: LatLng, end: LatLng): Double {
-        val results = FloatArray(1)
+        return distanceAndBearing(start, end).distanceMeters
+    }
+
+    private fun distanceAndBearing(start: LatLng, end: LatLng): Movement {
+        val bearingResults = FloatArray(2)
         Location.distanceBetween(
             start.latitude,
             start.longitude,
             end.latitude,
             end.longitude,
-            results
+            bearingResults
         )
-        return results[0].toDouble()
+        return Movement(
+            distanceMeters = bearingResults[0].toDouble(),
+            bearingDegrees = bearingResults[1].toDouble()
+        )
+    }
+
+    private fun normalizeBearing(bearing: Double): Double {
+        val normalized = bearing % 360.0
+        return if (normalized < 0) normalized + 360.0 else normalized
+    }
+
+    private fun bearingDeltaDegrees(first: Double, second: Double): Double {
+        val delta = kotlin.math.abs(normalizeBearing(first) - normalizeBearing(second))
+        return kotlin.math.min(delta, 360.0 - delta)
+    }
+
+    private fun updateCompassRotation(mapBearing: Double) {
+        fabCompass?.rotation = (-mapBearing).toFloat()
     }
 
     private fun updateCenterOnLocationFab(state: LocationMode) {
@@ -557,8 +625,10 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
     private fun LocationMode.shouldFollowLocation(): Boolean =
         this == LocationMode.FOLLOW || isRecording()
 
-    private fun LocationMode.resetsCameraBearing(): Boolean =
-        this == LocationMode.FOLLOW || this == LocationMode.RECORD
+    private data class Movement(
+        val distanceMeters: Double,
+        val bearingDegrees: Double
+    )
 
     override fun onStart() {
         super.onStart()
