@@ -1,0 +1,117 @@
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <View
+        android:id="@+id/mapViewInFragment"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/mainMenuButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:layout_marginEnd="16dp"
+        android:contentDescription="Main Menu"
+        android:src="@drawable/ic_menu_vector"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fabCenterOnLocationInFragment"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_margin="16dp"
+        android:contentDescription="Center on current location"
+        android:src="@drawable/ic_navigation"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fabRadialFollow"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="8dp"
+        android:contentDescription="Follow my location"
+        android:src="@drawable/ic_navigation"
+        android:visibility="gone"
+        app:backgroundTint="#4CAF50"
+        app:fabSize="mini"
+        app:layout_constraintBottom_toTopOf="@+id/fabCenterOnLocationInFragment"
+        app:layout_constraintEnd_toEndOf="@+id/fabCenterOnLocationInFragment"
+        app:layout_constraintStart_toStartOf="@+id/fabCenterOnLocationInFragment" />
+
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fabRadialRecord"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginEnd="8dp"
+        android:contentDescription="Record track"
+        android:src="@drawable/ic_record"
+        android:visibility="gone"
+        app:backgroundTint="#E53935"
+        app:fabSize="mini"
+        app:layout_constraintBottom_toBottomOf="@+id/fabCenterOnLocationInFragment"
+        app:layout_constraintEnd_toStartOf="@+id/fabCenterOnLocationInFragment" />
+
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fabRadialFollowRecord"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginEnd="8dp"
+        android:layout_marginBottom="8dp"
+        android:contentDescription="Follow and record track"
+        android:src="@drawable/ic_navigation"
+        android:visibility="gone"
+        app:backgroundTint="#9C27B0"
+        app:fabSize="mini"
+        app:layout_constraintBottom_toTopOf="@+id/fabCenterOnLocationInFragment"
+        app:layout_constraintEnd_toStartOf="@+id/fabCenterOnLocationInFragment" />
+
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fabToggleGasLayer"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginEnd="8dp"
+        android:contentDescription="Toggle Gas Layer"
+        android:src="@drawable/ic_local_gas_station"
+        android:visibility="gone"
+        app:layout_constraintBottom_toBottomOf="@+id/fabCenterOnLocationInFragment"
+        app:layout_constraintEnd_toStartOf="@+id/fabCenterOnLocationInFragment" />
+
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fabHideTrack"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:contentDescription="Hide current track"
+        android:src="@drawable/ic_timeline_off"
+        android:visibility="gone"
+        app:layout_constraintBottom_toBottomOf="@+id/fabToggleGasLayer"
+        app:layout_constraintEnd_toStartOf="@+id/fabToggleGasLayer"
+        app:layout_constraintTop_toTopOf="@+id/fabToggleGasLayer" />
+
+    <TextView
+        android:id="@+id/trackStatsText"
+        android:layout_width="wrap_content"
+        android:layout_height="40dp"
+        android:layout_marginStart="16dp"
+        android:layout_marginBottom="16dp"
+        android:background="#CC000000"
+        android:gravity="center"
+        android:minWidth="128dp"
+        android:paddingStart="14dp"
+        android:paddingEnd="14dp"
+        android:textColor="@android:color/white"
+        android:textSize="15sp"
+        android:textStyle="bold"
+        android:visibility="gone"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

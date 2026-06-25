@@ -71,6 +71,9 @@ class LocationService : Service() {
         private val _recordedPath = MutableStateFlow<List<LatLng>>(emptyList())
         val recordedPath: StateFlow<List<LatLng>> = _recordedPath.asStateFlow()
 
+        private val _recordingStartedAtMillis = MutableStateFlow<Long?>(null)
+        val recordingStartedAtMillis: StateFlow<Long?> = _recordingStartedAtMillis.asStateFlow()
+
         private val mode = MutableStateFlow<LocationMode>(LocationMode.INACTIVE)
 
         private val _lastLocation = MutableStateFlow(Location(LocationManager.GPS_PROVIDER))
@@ -294,8 +297,15 @@ class LocationService : Service() {
 
         when (newMode) {
             LocationMode.RECORD,
-            LocationMode.FOLLOW_AND_RECORD -> gpxLogger.startGpxLogging()
-            else -> gpxLogger.stopGpxLogging()
+            LocationMode.FOLLOW_AND_RECORD -> {
+                _recordingStartedAtMillis.value = System.currentTimeMillis()
+                gpxLogger.startGpxLogging()
+            }
+
+            else -> {
+                _recordingStartedAtMillis.value = null
+                gpxLogger.stopGpxLogging()
+            }
         }
     }
 

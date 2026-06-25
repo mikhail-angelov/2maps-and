@@ -113,5 +113,25 @@
         tools:ignore="HardcodedText"
         tools:visibility="visible" />
 
+    <TextView
+        android:id="@+id/trackStatsText"
+        android:layout_width="wrap_content"
+        android:layout_height="40dp"
+        android:layout_marginStart="16dp"
+        android:layout_marginBottom="16dp"
+        android:background="#CC000000"
+        android:gravity="center"
+        android:minWidth="128dp"
+        android:paddingStart="14dp"
+        android:paddingEnd="14dp"
+        android:textColor="@android:color/white"
+        android:textSize="15sp"
+        android:textStyle="bold"
+        android:visibility="gone"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        tools:ignore="HardcodedText"
+        tools:text="1.24 km | 12:34"
+        tools:visibility="visible" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

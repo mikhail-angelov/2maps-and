@@ -80,6 +80,9 @@ class LocationViewModel(application: Application) : AndroidViewModel(application
     val recordedPath: StateFlow<List<LatLng>> = LocationService.recordedPath
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    val recordingStartedAtMillis: StateFlow<Long?> = LocationService.recordingStartedAtMillis
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
     val zoomLevel: StateFlow<Double> = LocationService.zoomLevel
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 15.0)
 

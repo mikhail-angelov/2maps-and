@@ -1,6 +1,7 @@
 package com.bconf.a2maps_and
 
 import android.annotation.SuppressLint
+import android.content.Context
 import android.content.res.ColorStateList
 import android.graphics.Color
 import android.location.Location
@@ -14,6 +15,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.animation.AccelerateDecelerateInterpolator
 import android.widget.PopupWindow
+import android.widget.TextView
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.Lifecycle
@@ -37,6 +39,7 @@ import com.bconf.a2maps_and.placemark.PlacemarkModal
 import com.bconf.a2maps_and.placemark.PlacemarksViewModel
 import com.bconf.a2maps_and.track.TrackLayerManager
 import com.bconf.a2maps_and.track.TrackViewModel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import org.maplibre.android.MapLibre
@@ -52,11 +55,17 @@ import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.OnMapReadyCallback
 import org.maplibre.geojson.Point
 import java.io.File
+import java.util.Locale
+import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.pow
+import kotlin.math.sin
+import kotlin.math.sqrt
 
 class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.OnMapClickListener,
     OnMapReadyCallback {
 
-    private lateinit var mapView: MapView
+    private lateinit var mapView: View
     private lateinit var map: MapLibreMap
     private lateinit var mapsLayerManager: MapsLayerManager
     private lateinit var placemarkLayerManager: PlacemarkLayerManager
@@ -68,14 +77,13 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
     private val mapsViewModel: MapsViewModel by activityViewModels()
 
     private var longPressedLatLng: LatLng? = null
-    private val ID_MENU_NAVIGATE = 1
-    private val ID_MENU_ADD_PLACEMARK = 2
     private var fabCenterOnLocation: FloatingActionButton? = null
     private var fabHideTrack: FloatingActionButton? = null
     private var fabToggleGasLayer: FloatingActionButton? = null
     private var fabRadialFollow: FloatingActionButton? = null
     private var fabRadialRecord: FloatingActionButton? = null
     private var fabRadialFollowRecord: FloatingActionButton? = null
+    private var trackStatsText: TextView? = null
     private var isRadialMenuOpen = false
     private val radialMenuAnimDuration = 200L
     private var isUserPanning = false
@@ -86,29 +94,57 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
     private var initialPlacemarkLng: Float? = null
     private var isLocationLoaded: Boolean = false
     private var lastUserInteractionTime: Long = 0
-    private val USER_INTERACTION_TIMEOUT_MS = 60 * 1000 // 1 minute
+    private var latestRecordedPath: List<LatLng> = emptyList()
 
     companion object {
+        internal var isMapRuntimeEnabled = true
+        internal var layoutResId = R.layout.fragment_map
+        private const val ID_MENU_NAVIGATE = 1
+        private const val ID_MENU_ADD_PLACEMARK = 2
         private const val DEFAULT_LOCATION_LAT = 56.292374
         private const val DEFAULT_LOCATION_LNG = 43.985402
+        private const val INITIAL_PLACEMARK_SENTINEL = 999.0F
+        private const val DEFAULT_FOCUS_ZOOM = 13.0
+        private const val CAMERA_ANIMATION_MS = 1000
+        private const val LOCATION_CAMERA_ANIMATION_MS = 600
+        private const val ROUTE_CAMERA_PADDING = 150
+        private const val USER_INTERACTION_TIMEOUT_MS = 60 * 1000
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        MapLibre.getInstance(requireContext())
+        initializeMapRuntime(requireContext())
 
-        initialPlacemarkLat = args.placemarkLat.takeUnless { it == 999.0F }
-        initialPlacemarkLng = args.placemarkLng.takeUnless { it == 999.0F }
+        initialPlacemarkLat = args.placemarkLat.takeUnless { it == INITIAL_PLACEMARK_SENTINEL }
+        initialPlacemarkLng = args.placemarkLng.takeUnless { it == INITIAL_PLACEMARK_SENTINEL }
     }
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View? {
-        val view = inflater.inflate(R.layout.fragment_map, container, false)
+        val view = inflater.inflate(layoutResId, container, false)
+        bindViews(view)
+        if (isMapRuntimeEnabled) {
+            realMapView.onCreate(savedInstanceState)
+            realMapView.getMapAsync(this)
+        }
+        setupMainMenuButton()
+        setupLocationControls()
+        setupTrackControls()
+        setupGasLayerControls()
+
+        return view
+    }
+
+    private fun initializeMapRuntime(context: Context) {
+        if (isMapRuntimeEnabled) {
+            MapLibre.getInstance(context)
+        }
+    }
+
+    private fun bindViews(view: View) {
         mapView = view.findViewById(R.id.mapViewInFragment)
-        mapView.onCreate(savedInstanceState)
-        mapView.getMapAsync(this)
         fabCenterOnLocation = view.findViewById(R.id.fabCenterOnLocationInFragment)
         fabHideTrack = view.findViewById(R.id.fabHideTrack)
         fabToggleGasLayer = view.findViewById(R.id.fabToggleGasLayer)
@@ -116,7 +152,10 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         fabRadialRecord = view.findViewById(R.id.fabRadialRecord)
         fabRadialFollowRecord = view.findViewById(R.id.fabRadialFollowRecord)
         mainMenuButton = view.findViewById(R.id.mainMenuButton)
+        trackStatsText = view.findViewById(R.id.trackStatsText)
+    }
 
+    private fun setupMainMenuButton() {
         mainMenuButton?.setOnClickListener { anchorView ->
             @SuppressLint("InflateParams")
             val popupView = LayoutInflater.from(context).inflate(R.layout.popup_window_layout, null)
@@ -150,17 +189,15 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
             // Show the popup window anchored to the button
             popupWindow.showAsDropDown(anchorView)
         }
+    }
 
-
+    private fun setupLocationControls() {
         fabCenterOnLocation?.setOnClickListener {
             isUserPanning = false
             if (isRadialMenuOpen) {
                 closeRadialMenu()
             } else if (locationViewModel.locationMode.value != LocationMode.INACTIVE) {
-                // If already active, just reset to inactive (cancel)
                 locationViewModel.onCenterButtonClicked()
-            } else {
-                // If INACTIVE and menu is closed, pressing again does nothing
             }
         }
         fabCenterOnLocation?.setOnLongClickListener {
@@ -171,42 +208,31 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
             true
         }
 
-        // Radial menu item: Follow
-        fabRadialFollow?.setOnClickListener {
-            locationViewModel.setLocationModeFromMenu(LocationMode.FOLLOW)
-            locationViewModel.lastKnownGpsLocation.value?.let { location ->
-                updateCurrentLocationIndicatorAndCamera(location, true)
-            }
-            closeRadialMenu()
-        }
+        fabRadialFollow?.setOnClickListener { selectLocationMode(LocationMode.FOLLOW) }
+        fabRadialRecord?.setOnClickListener { selectLocationMode(LocationMode.RECORD) }
+        fabRadialFollowRecord?.setOnClickListener { selectLocationMode(LocationMode.FOLLOW_AND_RECORD) }
+    }
 
-        // Radial menu item: Record
-        fabRadialRecord?.setOnClickListener {
-            locationViewModel.setLocationModeFromMenu(LocationMode.RECORD)
-            locationViewModel.lastKnownGpsLocation.value?.let { location ->
-                updateCurrentLocationIndicatorAndCamera(location, true)
-            }
-            closeRadialMenu()
+    private fun selectLocationMode(mode: LocationMode) {
+        locationViewModel.setLocationModeFromMenu(mode)
+        locationViewModel.lastKnownGpsLocation.value?.let { location ->
+            updateCurrentLocationIndicatorAndCamera(location, true)
         }
+        closeRadialMenu()
+    }
 
-        // Radial menu item: Follow + Record
-        fabRadialFollowRecord?.setOnClickListener {
-            locationViewModel.setLocationModeFromMenu(LocationMode.FOLLOW_AND_RECORD)
-            locationViewModel.lastKnownGpsLocation.value?.let { location ->
-                updateCurrentLocationIndicatorAndCamera(location, true)
-            }
-            closeRadialMenu()
-        }
+    private fun setupTrackControls() {
         fabHideTrack?.setOnClickListener {
             trackViewModel.clearTrack()
         }
+    }
 
+    private fun setupGasLayerControls() {
         fabToggleGasLayer?.visibility = View.VISIBLE
         fabToggleGasLayer?.setOnClickListener {
             placemarkViewModel.toggleGasLayerVisibility()
         }
 
-        // Observe gas layer visibility and update button appearance
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 placemarkViewModel.isGasLayerVisible.collect { isVisible ->
@@ -220,8 +246,6 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
                 }
             }
         }
-
-        return view
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
@@ -235,9 +259,19 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
 
     override fun onMapReady(mapLibreMap: MapLibreMap) {
         this.map = mapLibreMap
+        setupScaleBar()
+        setupMapListeners()
+        setupLayerManagers()
+        loadInitialMapStyle()
+        observeLocation()
+        observeTrackPoints()
+        observeLocationMode()
+        observeRecordedPath()
+        startTrackStatsTimer()
+    }
 
-        // Enable scale bar
-        val scaleBarPlugin = ScaleBarPlugin(mapView, map)
+    private fun setupScaleBar() {
+        val scaleBarPlugin = ScaleBarPlugin(realMapView, map)
         val scaleBarOptions = ScaleBarOptions(requireContext())
         scaleBarOptions
             .setTextColor(android.R.color.black)
@@ -251,7 +285,12 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
             .setShowTextBorder(true)
             .setMetricUnit(true)
         scaleBarPlugin.create(scaleBarOptions)
+    }
 
+    private val realMapView: MapView
+        get() = mapView as MapView
+
+    private fun setupMapListeners() {
         map.addOnCameraMoveStartedListener { reason ->
             if (reason == MapLibreMap.OnCameraMoveStartedListener.REASON_API_GESTURE) {
                 isUserPanning = true
@@ -281,7 +320,9 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
             }
         }
         mapView.let { registerForContextMenu(it) }
+    }
 
+    private fun setupLayerManagers() {
         mapsLayerManager = MapsLayerManager(requireContext(), map)
         placemarkLayerManager = PlacemarkLayerManager(
             requireContext(), map,
@@ -304,65 +345,87 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
             requireContext(), map, trackViewModel,
             viewLifecycleOwner.lifecycle,
         )
+    }
+
+    private fun loadInitialMapStyle() {
         mapsLayerManager.loadInitialMapStyle({ style ->
             placemarkLayerManager.onStyleLoaded(style)
             gasLayerManager.onStyleLoaded(style)
             trackLayerManager.setupTrackLayer(style)
-
-            val lat = initialPlacemarkLat
-            val lng = initialPlacemarkLng
-            if (lat != null && lng != null) {
-                isLocationLoaded = true
-                val targetLatLng = LatLng(lat.toDouble(), lng.toDouble())
-                val cameraPosition = CameraPosition.Builder()
-                    .target(targetLatLng)
-                    .zoom(13.0)
-                    .build()
-                map.animateCamera(
-                    CameraUpdateFactory.newCameraPosition(cameraPosition),
-                    1000
-                )
-            }
+            focusInitialPlacemark()
         })
+    }
 
-        viewLifecycleOwner.lifecycleScope.launch {
-            viewLifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                locationViewModel.lastKnownGpsLocation.collectLatest { location ->
-                    if (location != null) {
-                        updateCurrentLocationIndicatorAndCamera(location)
-                    }
+    private fun focusInitialPlacemark() {
+        val lat = initialPlacemarkLat
+        val lng = initialPlacemarkLng
+        if (lat == null || lng == null) return
+        isLocationLoaded = true
+        val cameraPosition = CameraPosition.Builder()
+            .target(LatLng(lat.toDouble(), lng.toDouble()))
+            .zoom(DEFAULT_FOCUS_ZOOM)
+            .build()
+        map.animateCamera(
+            CameraUpdateFactory.newCameraPosition(cameraPosition),
+            CAMERA_ANIMATION_MS
+        )
+    }
+
+    private fun observeLocation() {
+        launchWhenStarted {
+            locationViewModel.lastKnownGpsLocation.collectLatest { location ->
+                if (location != null) {
+                    updateCurrentLocationIndicatorAndCamera(location)
                 }
             }
         }
-        viewLifecycleOwner.lifecycleScope.launch {
-            viewLifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                trackViewModel.trackPoints.collectLatest { points ->
-                    val state = locationViewModel.locationMode.value
-                    val isRecording =
-                        state == LocationMode.RECORD || state == LocationMode.FOLLOW_AND_RECORD
-                    fabHideTrack?.visibility =
-                        if (points.isNotEmpty() && !isRecording) View.VISIBLE else View.GONE
-                    if (points.isNotEmpty() && !isRecording) zoomToRoute(points)
-                }
+    }
+
+    private fun observeTrackPoints() {
+        launchWhenStarted {
+            trackViewModel.trackPoints.collectLatest { points ->
+                val isVisibleTrack = points.isNotEmpty() &&
+                        !locationViewModel.locationMode.value.isRecording()
+                fabHideTrack?.visibility = if (isVisibleTrack) View.VISIBLE else View.GONE
+                if (isVisibleTrack) zoomToRoute(points)
             }
         }
+    }
 
-        viewLifecycleOwner.lifecycleScope.launch {
-            viewLifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                locationViewModel.locationMode.collectLatest { state ->
-                    updateCenterOnLocationFab(state)
-                }
+    private fun observeLocationMode() {
+        launchWhenStarted {
+            locationViewModel.locationMode.collectLatest { state ->
+                updateCenterOnLocationFab(state)
+                updateTrackStatsVisibility(state)
             }
         }
+    }
 
+    private fun observeRecordedPath() {
+        launchWhenStarted {
+            locationViewModel.recordedPath.collectLatest { points ->
+                latestRecordedPath = points
+                if (locationViewModel.locationMode.value.isRecording()) {
+                    trackViewModel.setTrackPoints(points)
+                }
+                updateTrackStats()
+            }
+        }
+    }
+
+    private fun startTrackStatsTimer() {
+        launchWhenStarted {
+            while (true) {
+                updateTrackStats()
+                delay(1000)
+            }
+        }
+    }
+
+    private fun launchWhenStarted(block: suspend () -> Unit) {
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                locationViewModel.recordedPath.collectLatest { points ->
-                    val state = locationViewModel.locationMode.value
-                    if (state == LocationMode.RECORD || state == LocationMode.FOLLOW_AND_RECORD) {
-                        trackViewModel.setTrackPoints(points)
-                    }
-                }
+                block()
             }
         }
     }
@@ -374,8 +437,8 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
             .build()
 
         map.animateCamera(
-            CameraUpdateFactory.newLatLngBounds(latLngBounds, 150),
-            1000
+            CameraUpdateFactory.newLatLngBounds(latLngBounds, ROUTE_CAMERA_PADDING),
+            CAMERA_ANIMATION_MS
         )
     }
 
@@ -391,15 +454,14 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         )
 
         val state = locationViewModel.locationMode.value
-        val shouldFollow =
-            state == LocationMode.FOLLOW || state == LocationMode.RECORD || state == LocationMode.FOLLOW_AND_RECORD
         if (isUserPanning && (System.currentTimeMillis() - lastUserInteractionTime > USER_INTERACTION_TIMEOUT_MS)) {
             isUserPanning = false
         }
-        if (force || (shouldFollow && !isUserPanning) || !isLocationLoaded) {
-            var zoom = map.cameraPosition.zoom.coerceAtLeast(13.0)
-            if (!isLocationLoaded) {
-                zoom = locationViewModel.zoomLevel.value
+        if (force || (state.shouldFollowLocation() && !isUserPanning) || !isLocationLoaded) {
+            val zoom = when {
+                !isLocationLoaded -> locationViewModel.zoomLevel.value
+                force -> map.cameraPosition.zoom.coerceAtLeast(DEFAULT_FOCUS_ZOOM)
+                else -> map.cameraPosition.zoom
             }
             isLocationLoaded = true
             val lat = if (location.latitude == 0.0) DEFAULT_LOCATION_LAT else location.latitude
@@ -409,12 +471,15 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
                 .zoom(zoom)
                 .padding(0.0, 0.0, 0.0, 0.0)
 
-            if (state == LocationMode.FOLLOW || state == LocationMode.RECORD) {
+            if (state.resetsCameraBearing()) {
                 cameraBuilder.tilt(0.0)
                 cameraBuilder.bearing(0.0)
             }
 
-            map.animateCamera(CameraUpdateFactory.newCameraPosition(cameraBuilder.build()), 600)
+            map.animateCamera(
+                CameraUpdateFactory.newCameraPosition(cameraBuilder.build()),
+                LOCATION_CAMERA_ANIMATION_MS
+            )
         }
     }
 
@@ -442,34 +507,58 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         }
     }
 
+    private fun updateTrackStatsVisibility(state: LocationMode) {
+        trackStatsText?.visibility = if (state.isRecording()) View.VISIBLE else View.GONE
+        if (state.isRecording()) {
+            updateTrackStats()
+        }
+    }
+
+    private fun updateTrackStats() {
+        if (trackStatsText?.visibility != View.VISIBLE) return
+        trackStatsText?.text = MapTrackStats.format(
+            points = latestRecordedPath,
+            startedAtMillis = locationViewModel.recordingStartedAtMillis.value
+        )
+    }
+
+    private fun LocationMode.isRecording(): Boolean =
+        this == LocationMode.RECORD || this == LocationMode.FOLLOW_AND_RECORD
+
+    private fun LocationMode.shouldFollowLocation(): Boolean =
+        this == LocationMode.FOLLOW || isRecording()
+
+    private fun LocationMode.resetsCameraBearing(): Boolean =
+        this == LocationMode.FOLLOW || this == LocationMode.RECORD
+
     override fun onStart() {
         super.onStart()
-        if (::mapView.isInitialized) mapView.onStart()
+        if (isMapRuntimeEnabled && ::mapView.isInitialized) realMapView.onStart()
     }
 
     override fun onResume() {
         super.onResume()
-        if (::mapView.isInitialized) mapView.onResume()
+        if (isMapRuntimeEnabled && ::mapView.isInitialized) realMapView.onResume()
     }
 
     override fun onPause() {
         super.onPause()
-        if (::mapView.isInitialized) mapView.onPause()
+        if (isMapRuntimeEnabled && ::mapView.isInitialized) realMapView.onPause()
     }
 
     override fun onStop() {
         super.onStop()
-        if (::mapView.isInitialized) mapView.onStop()
+        if (isMapRuntimeEnabled && ::mapView.isInitialized) realMapView.onStop()
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
-        if (::mapView.isInitialized) mapView.onSaveInstanceState(outState)
+        if (isMapRuntimeEnabled && ::mapView.isInitialized) realMapView.onSaveInstanceState(outState)
     }
 
     override fun onLowMemory() {
         super.onLowMemory()
-        if (::mapView.isInitialized) mapView.onLowMemory()
+        if (isMapRuntimeEnabled && ::mapView.isInitialized) realMapView.onLowMemory()
     }
 
     override fun onDestroyView() {
@@ -482,7 +571,7 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         if (::gasLayerManager.isInitialized) gasLayerManager.cleanup()
         if (::trackLayerManager.isInitialized) trackLayerManager.cleanup()
         isLocationLoaded = false
-        if (::mapView.isInitialized) mapView.onDestroy()
+        if (isMapRuntimeEnabled && ::mapView.isInitialized) realMapView.onDestroy()
     }
 
     override fun onMapClick(point: LatLng): Boolean {
@@ -583,5 +672,59 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         isRadialMenuOpen = false
 
         fabToggleGasLayer?.visibility = View.VISIBLE
+    }
+}
+
+internal object MapTrackStats {
+    private const val EARTH_RADIUS_METERS = 6_371_000.0
+
+    fun format(
+        points: List<LatLng>,
+        startedAtMillis: Long?,
+        nowMillis: Long = System.currentTimeMillis()
+    ): String {
+        val distance = formatDistance(calculateDistanceMeters(points))
+        val elapsed = formatElapsedTime(startedAtMillis, nowMillis)
+        return "$distance | $elapsed"
+    }
+
+    fun calculateDistanceMeters(points: List<LatLng>): Double {
+        if (points.size < 2) return 0.0
+        return points.zipWithNext().sumOf { (start, end) ->
+            calculateDistanceMeters(start, end)
+        }
+    }
+
+    private fun calculateDistanceMeters(start: LatLng, end: LatLng): Double {
+        val startLat = Math.toRadians(start.latitude)
+        val endLat = Math.toRadians(end.latitude)
+        val deltaLat = endLat - startLat
+        val deltaLng = Math.toRadians(end.longitude - start.longitude)
+        val a = sin(deltaLat / 2).pow(2.0) +
+                cos(startLat) * cos(endLat) * sin(deltaLng / 2).pow(2.0)
+        val c = 2 * atan2(sqrt(a), sqrt(1 - a))
+        return EARTH_RADIUS_METERS * c
+    }
+
+    private fun formatDistance(distanceMeters: Double): String {
+        return if (distanceMeters >= 1000.0) {
+            String.format(Locale.US, "%.2f km", distanceMeters / 1000.0)
+        } else {
+            String.format(Locale.US, "%.0f m", distanceMeters)
+        }
+    }
+
+    private fun formatElapsedTime(startedAtMillis: Long?, nowMillis: Long): String {
+        val elapsedSeconds = startedAtMillis
+            ?.let { ((nowMillis - it) / 1000).coerceAtLeast(0) }
+            ?: 0
+        val hours = elapsedSeconds / 3600
+        val minutes = (elapsedSeconds % 3600) / 60
+        val seconds = elapsedSeconds % 60
+        return if (hours > 0) {
+            String.format(Locale.US, "%d:%02d:%02d", hours, minutes, seconds)
+        } else {
+            String.format(Locale.US, "%02d:%02d", minutes, seconds)
+        }
     }
 }
