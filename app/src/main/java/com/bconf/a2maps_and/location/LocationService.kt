@@ -1,4 +1,4 @@
-package com.bconf.a2maps_and.navigation
+package com.bconf.a2maps_and.location
 
 
 import android.app.Notification
@@ -10,7 +10,6 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.location.Location
 import android.location.LocationManager
-import android.os.Build
 import android.os.IBinder
 import android.os.Looper
 import android.util.Log
@@ -33,7 +32,7 @@ import org.maplibre.android.geometry.LatLng
 import com.huawei.hms.location.FusedLocationProviderClient as HmsFusedLocationProviderClient
 import com.huawei.hms.location.LocationCallback as HmsLocationCallback
 
-class NavigationEngineService : Service() {
+class LocationService : Service() {
 
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private lateinit var locationCallback: LocationCallback
@@ -46,15 +45,16 @@ class NavigationEngineService : Service() {
     private val serviceScope = CoroutineScope(Dispatchers.Default + serviceJob)
 
     private lateinit var gpxLogger: GpxLogger
+    private var isStopped = false
 
     companion object {
-        const val ACTION_SET_CENTER_ON_LOCATION_STATE =
-            "com.bconf.a2maps_and.action.SET_CENTER_ON_LOCATION_STATE"
+        const val ACTION_SET_LOCATION_MODE =
+            "com.bconf.a2maps_and.action.SET_LOCATION_MODE"
         const val ACTION_START_LOCATION_SERVICE = "ACTION_START_LOCATION_SERVICE"
         const val ACTION_STOP_SERVICE = "ACTION_STOP_SERVICE"
-        const val EXTRA_CENTER_ON_LOCATION_STATE = "extra_center_on_location_state"
-        const val PREFS_NAME = "NavigationEnginePrefs"
-        const val KEY_CENTER_ON_LOCATION_STATE = "centerOnLocationState"
+        const val EXTRA_LOCATION_MODE = "extra_location_mode"
+        const val PREFS_NAME = "LocationServicePrefs"
+        const val KEY_LOCATION_MODE = "locationMode"
         const val KEY_ZOOM_LEVEL = "zoomLevel"
         const val ACTION_SET_ZOOM_LEVEL = "com.bconf.a2maps_and.action.SET_ZOOM_LEVEL"
         const val EXTRA_ZOOM_LEVEL = "extra_zoom_level"
@@ -71,7 +71,7 @@ class NavigationEngineService : Service() {
         private val _recordedPath = MutableStateFlow<List<LatLng>>(emptyList())
         val recordedPath: StateFlow<List<LatLng>> = _recordedPath.asStateFlow()
 
-        private val state = MutableStateFlow<CenterOnLocationState>(CenterOnLocationState.INACTIVE)
+        private val mode = MutableStateFlow<LocationMode>(LocationMode.INACTIVE)
 
         private val _lastLocation = MutableStateFlow(Location(LocationManager.GPS_PROVIDER))
         val lastLocation: StateFlow<Location> = _lastLocation.asStateFlow()
@@ -81,11 +81,11 @@ class NavigationEngineService : Service() {
     }
 
     private val NOTIFICATION_ID = 101
-    private val CHANNEL_ID = "NavigationEngineChannel"
+    private val CHANNEL_ID = "LocationServiceChannel"
 
     override fun onCreate() {
         super.onCreate()
-        Log.d("NavigationEngineService", "onCreate")
+        Log.d("LocationService", "onCreate")
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
         huaweiFusedLocationClient =
             com.huawei.hms.location.LocationServices.getFusedLocationProviderClient(this)
@@ -137,7 +137,7 @@ class NavigationEngineService : Service() {
         }
         _lastLocation.value = location
         Log.d(
-            "NavigationEngineService",
+            "LocationService",
             "Restored last location: ${location.latitude}, ${location.longitude}"
         )
     }
@@ -160,7 +160,7 @@ class NavigationEngineService : Service() {
                 override fun onLocationResult(locationResult: LocationResult) {
                     locationResult.lastLocation?.let { location ->
                         Log.d(
-                            "NavigationEngineService",
+                            "LocationService",
                             "GMS Location: ${location.latitude}, ${location.longitude}, ${location.accuracy}"
                         )
                         onNewLocationLogic(location)
@@ -172,7 +172,7 @@ class NavigationEngineService : Service() {
                 override fun onLocationResult(locationResult: com.huawei.hms.location.LocationResult?) {
                     locationResult?.lastLocation?.let { location ->
                         Log.d(
-                            "NavigationEngineService",
+                            "LocationService",
                             "HMS Location: ${location.latitude}, ${location.longitude}, ${location.accuracy}"
                         )
                         onNewLocationLogic(location)
@@ -226,7 +226,7 @@ class NavigationEngineService : Service() {
 
     private fun stopLocationUpdates() {
         try {
-            if (checkGMS()) {
+            if (checkGMS() && ::locationCallback.isInitialized) {
                 fusedLocationClient.removeLocationUpdates(locationCallback)
                 Log.d("LocationService", "GMS location updates stopped.")
             }
@@ -235,7 +235,7 @@ class NavigationEngineService : Service() {
         }
 
         try {
-            if (checkHMS()) {
+            if (checkHMS() && ::huaweiLocationCallback.isInitialized) {
                 huaweiFusedLocationClient.removeLocationUpdates(huaweiLocationCallback)
                 Log.d("LocationService", "HMS location updates stopped.")
             }
@@ -245,18 +245,19 @@ class NavigationEngineService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        Log.d("NavigationEngineService", "onStartCommand, action: ${intent?.action}")
+        Log.d("LocationService", "onStartCommand, action: ${intent?.action}")
 
         when (intent?.action) {
             ACTION_START_LOCATION_SERVICE -> {
+                startForegroundServiceWithNotification()
                 startLocationUpdates()
             }
 
-            ACTION_SET_CENTER_ON_LOCATION_STATE -> {
-                val stateName = intent.getStringExtra(EXTRA_CENTER_ON_LOCATION_STATE)
-                val newState = stateName?.let { CenterOnLocationState.valueOf(it) }
-                if (newState != null) {
-                    setCenterOnLocationState(newState)
+            ACTION_SET_LOCATION_MODE -> {
+                val modeName = intent.getStringExtra(EXTRA_LOCATION_MODE)
+                val newMode = modeName?.let { LocationMode.valueOf(it) }
+                if (newMode != null) {
+                    setLocationMode(newMode)
                 }
             }
 
@@ -268,15 +269,15 @@ class NavigationEngineService : Service() {
             }
 
             ACTION_STOP_SERVICE -> {
-                Log.i("NavEngineService", "Received ACTION_STOP_SERVICE. Shutting down.")
+                Log.i("LocationService", "Received ACTION_STOP_SERVICE. Shutting down.")
                 stopService()
                 return START_NOT_STICKY
             }
 
             else -> {
-                Log.w("NavigationService", "Received action: ${intent?.action} or service restart.")
+                Log.w("LocationService", "Received action: ${intent?.action} or service restart.")
                 if (intent?.action == null) {
-                    Log.d("NavigationService", "Service started with null action, stopping.")
+                    Log.d("LocationService", "Service started with null action, stopping.")
                     stopService()
                 }
             }
@@ -284,24 +285,24 @@ class NavigationEngineService : Service() {
         return START_STICKY
     }
 
-    private fun setCenterOnLocationState(newState: CenterOnLocationState) {
+    private fun setLocationMode(newMode: LocationMode) {
         val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit()
-        prefs.putString(KEY_CENTER_ON_LOCATION_STATE, newState.name)
+        prefs.putString(KEY_LOCATION_MODE, newMode.name)
         prefs.apply()
         _recordedPath.value = emptyList()
-        state.value = newState
+        mode.value = newMode
 
-        when (newState) {
-            CenterOnLocationState.RECORD,
-            CenterOnLocationState.FOLLOW_AND_RECORD -> gpxLogger.startGpxLogging()
+        when (newMode) {
+            LocationMode.RECORD,
+            LocationMode.FOLLOW_AND_RECORD -> gpxLogger.startGpxLogging()
             else -> gpxLogger.stopGpxLogging()
         }
     }
 
     private fun onNewLocationLogic(location: Location) {
         if (location.accuracy > 230) return
-        val isRecording = state.value == CenterOnLocationState.RECORD ||
-                state.value == CenterOnLocationState.FOLLOW_AND_RECORD
+        val isRecording = mode.value == LocationMode.RECORD ||
+                mode.value == LocationMode.FOLLOW_AND_RECORD
         if (isRecording) {
             gpxLogger.appendGpxTrackPoint(location)
             _recordedPath.value = _recordedPath.value + LatLng(location.latitude, location.longitude)
@@ -313,45 +314,41 @@ class NavigationEngineService : Service() {
     private fun startForegroundServiceWithNotification() {
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
             .setOngoing(true)
-            .setContentText("2 Maps Navigation")
+            .setContentText("2 Maps Location")
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setPriority(NotificationCompat.PRIORITY_MIN)
             .setCategory(Notification.CATEGORY_SERVICE)
             .build()
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(
-                NOTIFICATION_ID,
-                notification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
-            )
-        } else {
-            startForeground(NOTIFICATION_ID, notification)
-        }
+        startForeground(
+            NOTIFICATION_ID,
+            notification,
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
+        )
     }
 
     private fun createNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val serviceChannel = NotificationChannel(
-                CHANNEL_ID,
-                "Navigation Service Channel",
-                NotificationManager.IMPORTANCE_LOW
-            )
-            val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-            manager.createNotificationChannel(serviceChannel)
-        }
+        val serviceChannel = NotificationChannel(
+            CHANNEL_ID,
+            "Location Service Channel",
+            NotificationManager.IMPORTANCE_LOW
+        )
+        val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+        manager.createNotificationChannel(serviceChannel)
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onTaskRemoved(rootIntent: Intent?) {
-        Log.d("NavigationService", "Task removed, stopping service.")
+        Log.d("LocationService", "Task removed, stopping service.")
         stopService()
         super.onTaskRemoved(rootIntent)
     }
 
     private fun stopService() {
-        Log.i("NavEngineService", "stopService called. Cleaning up...")
+        if (isStopped) return
+        isStopped = true
+        Log.i("LocationService", "stopService called. Cleaning up...")
         gpxLogger.stopGpxLogging()
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopLocationUpdates()
@@ -360,8 +357,8 @@ class NavigationEngineService : Service() {
     }
 
     override fun onDestroy() {
-        Log.d("NavigationService", "onDestroy: Service is being destroyed.")
-        super.onDestroy()
+        Log.d("LocationService", "onDestroy: Service is being destroyed.")
         stopService()
+        super.onDestroy()
     }
 }

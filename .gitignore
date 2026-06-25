@@ -16,3 +16,7 @@ info.txt
 local.properties
 
 /app/release/*
+
+# Local/offline map data should not be committed.
+/app/src/main/assets/*.mbtiles
+!/app/src/main/assets/planet.mbtiles

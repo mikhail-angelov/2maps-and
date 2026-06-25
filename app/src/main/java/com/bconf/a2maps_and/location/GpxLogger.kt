@@ -1,4 +1,4 @@
-package com.bconf.a2maps_and.navigation
+package com.bconf.a2maps_and.location
 
 import android.content.Context
 import android.location.Location
@@ -9,6 +9,7 @@ import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.TimeZone
 
 class GpxLogger(private val context: Context) {
 
@@ -48,7 +49,7 @@ class GpxLogger(private val context: Context) {
             gpxFileWriter?.append("  <name>$fileName</name>\n")
             gpxFileWriter?.append("</metadata>\n")
             gpxFileWriter?.append("<trk>\n")
-            gpxFileWriter?.append("  <name>Navigation Track</name>\n")
+            gpxFileWriter?.append("  <name>Location Track</name>\n")
             gpxFileWriter?.append("  <trkseg>\n")
             Log.i("GpxLogger", "Started GPX logging to ${gpxFile.absolutePath}")
         } catch (e: IOException) {
@@ -60,9 +61,9 @@ class GpxLogger(private val context: Context) {
     fun appendGpxTrackPoint(location: Location) {
         gpxFileWriter?.let { writer ->
             try {
-                val time = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.getDefault()).format(
-                    Date(location.time)
-                )
+                val time = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply {
+                    timeZone = TimeZone.getTimeZone("UTC")
+                }.format(Date(location.time))
                 writer.append("    <trkpt lat=\"${location.latitude}\" lon=\"${location.longitude}\">\n")
                 writer.append("      <ele>${location.altitude}</ele>\n")
                 writer.append("      <time>$time</time>\n")

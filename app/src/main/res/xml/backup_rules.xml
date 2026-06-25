@@ -6,8 +6,10 @@
    See https://developer.android.com/about/versions/12/backup-restore
 -->
 <full-backup-content>
-    <!--
-   <include domain="sharedpref" path="."/>
-   <exclude domain="sharedpref" path="device.xml"/>
--->
+    <exclude domain="sharedpref" path="auth_prefs.xml" />
+    <exclude domain="sharedpref" path="LocationServicePrefs.xml" />
+    <exclude domain="file" path="gpx/" />
+    <exclude domain="file" path="maps/" />
+    <exclude domain="file" path="placemarks.json" />
+    <exclude domain="file" path="gas_stations.json" />
 </full-backup-content>

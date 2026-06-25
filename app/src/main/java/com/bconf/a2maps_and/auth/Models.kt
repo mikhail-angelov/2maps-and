@@ -32,8 +32,3 @@ data class UserPayload(
     val email: String,
     val role: String?
 )
-
-data class CheckResponse(
-    val token: String,
-    val user: UserPayload?
-)

@@ -19,9 +19,9 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.navigation.fragment.findNavController
+import com.bconf.a2maps_and.external.ExternalNavigationChooser
 import com.bconf.a2maps_and.R
 import com.bconf.a2maps_and.databinding.BottomSheetPlacemarkBinding
-import com.bconf.a2maps_and.navigation.NavigationChooser
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
@@ -120,7 +120,7 @@ class PlacemarkModal : BottomSheetDialogFragment() {
         }
 
         binding.navigateButton.setOnClickListener {
-            NavigationChooser.show(requireContext(), placemark.latitude, placemark.longitude)
+            ExternalNavigationChooser.show(requireContext(), placemark.latitude, placemark.longitude)
         }
         binding.shareButton.setOnClickListener {
             val lat = placemark.latitude
@@ -144,8 +144,7 @@ class PlacemarkModal : BottomSheetDialogFragment() {
         binding.centerButton.setOnClickListener {
             val action = PlacemarksFragmentDirections.actionPlacemarksFragmentToMapFragment(
                 placemarkLat = placemark.latitude.toFloat(),
-                placemarkLng = placemark.longitude.toFloat(),
-                placemarkId = placemark.id
+                placemarkLng = placemark.longitude.toFloat()
             )
             findNavController().navigate(action)
             dismiss()

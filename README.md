@@ -106,7 +106,7 @@ out;
 
 
 ### Modern Android Architecture:
-- **MVVM Architecture:** Separates UI logic from business logic using ViewModels (`PlacemarksViewModel`, `NavigationViewModel`, `TrackViewModel`).
+- **MVVM Architecture:** Separates UI logic from business logic using ViewModels (`PlacemarksViewModel`, `LocationViewModel`, `TrackViewModel`).
 - **Kotlin & Coroutines:** Written entirely in Kotlin, using coroutines and `StateFlow` for managing asynchronous operations and state.
 - **Android Jetpack:**
     - **Navigation Component:** Manages in-app navigation between the map, placemark list, and other screens.

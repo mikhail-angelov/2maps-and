@@ -35,8 +35,7 @@ class MainMenuFragment : Fragment() {
         val menuItems = mutableListOf(
             MainMenuItem("Placemarks", actionId = R.id.action_mainMenuFragment_to_placemarksFragment),
             MainMenuItem("Tracks", actionId = R.id.action_mainMenuFragment_to_tracksFragment),
-            MainMenuItem("Maps", actionId = R.id.action_mainMenuFragment_to_mapsFragment),
-            MainMenuItem("Import Placemarks") { showImportPlacemarksToast() }
+            MainMenuItem("Maps", actionId = R.id.action_mainMenuFragment_to_mapsFragment)
         )
 
         if (AuthRepository.isLoggedIn()) {
@@ -60,11 +59,6 @@ class MainMenuFragment : Fragment() {
         mainMenuRecyclerView.adapter = mainMenuAdapter
 
         return view
-    }
-
-    private fun showImportPlacemarksToast() {
-        // TODO: Implement file selection dialog
-        Toast.makeText(context, "Import Placemarks clicked", Toast.LENGTH_SHORT).show()
     }
 
     private fun syncPlacemarks() {

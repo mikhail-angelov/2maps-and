@@ -1,4 +1,4 @@
-package com.bconf.a2maps_and.navigation
+package com.bconf.a2maps_and.external
 
 import android.content.ActivityNotFoundException
 import android.content.Context
@@ -7,7 +7,7 @@ import androidx.appcompat.app.AlertDialog
 import androidx.core.net.toUri
 import java.util.Locale
 
-object NavigationChooser {
+object ExternalNavigationChooser {
 
     fun show(context: Context, lat: Double, lng: Double) {
         AlertDialog.Builder(context)

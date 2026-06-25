@@ -1,40 +1,40 @@
 package com.bconf.a2maps_and
 
-import com.bconf.a2maps_and.navigation.CenterOnLocationState
+import com.bconf.a2maps_and.location.LocationMode
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
-class CenterOnLocationStateTest {
+class LocationModeTest {
 
     @Test
     fun `INACTIVE should have correct ordinal`() {
-        assertEquals(0, CenterOnLocationState.INACTIVE.ordinal)
+        assertEquals(0, LocationMode.INACTIVE.ordinal)
     }
 
     @Test
     fun `FOLLOW should be first active state`() {
-        assertEquals(1, CenterOnLocationState.FOLLOW.ordinal)
+        assertEquals(1, LocationMode.FOLLOW.ordinal)
     }
 
     @Test
     fun `RECORD should be second active state`() {
-        assertEquals(2, CenterOnLocationState.RECORD.ordinal)
+        assertEquals(2, LocationMode.RECORD.ordinal)
     }
 
     @Test
     fun `FOLLOW_AND_RECORD should exist as new combined state`() {
-        assertEquals(3, CenterOnLocationState.FOLLOW_AND_RECORD.ordinal)
+        assertEquals(3, LocationMode.FOLLOW_AND_RECORD.ordinal)
     }
 
     @Test
     fun `FOLLOW_AND_RECORD should have correct name`() {
-        assertEquals("FOLLOW_AND_RECORD", CenterOnLocationState.FOLLOW_AND_RECORD.name)
+        assertEquals("FOLLOW_AND_RECORD", LocationMode.FOLLOW_AND_RECORD.name)
     }
 
     @Test
     fun `should be able to parse FOLLOW_AND_RECORD from string`() {
-        val parsed = CenterOnLocationState.valueOf("FOLLOW_AND_RECORD")
-        assertEquals(CenterOnLocationState.FOLLOW_AND_RECORD, parsed)
+        val parsed = LocationMode.valueOf("FOLLOW_AND_RECORD")
+        assertEquals(LocationMode.FOLLOW_AND_RECORD, parsed)
     }
 }
 

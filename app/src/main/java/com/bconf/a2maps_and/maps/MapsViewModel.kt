@@ -21,6 +21,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.io.File
 import java.io.FileOutputStream
+import java.util.Locale
 import kotlin.math.pow
 
 class MapsViewModel(application: Application) : AndroidViewModel(application) {
@@ -54,14 +55,24 @@ class MapsViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch(Dispatchers.IO) {
             val context = getApplication<Application>().applicationContext
             val fileName = getFileName(uri)
+            if (!fileName.lowercase(Locale.US).endsWith(".mbtiles")) {
+                Log.w("MapsViewModel", "Rejected non-MBTiles import: $fileName")
+                return@launch
+            }
+
             val inputStream = context.contentResolver.openInputStream(uri)
+            if (inputStream == null) {
+                Log.w("MapsViewModel", "Could not open map import URI: $uri")
+                return@launch
+            }
+
             val mapsDir = File(context.filesDir, "maps")
             if (!mapsDir.exists()) {
                 mapsDir.mkdirs()
             }
             val file = File(mapsDir, fileName)
             val outputStream = FileOutputStream(file)
-            inputStream?.use { input ->
+            inputStream.use { input ->
                 outputStream.use { output ->
                     input.copyTo(output)
                 }
@@ -110,8 +121,11 @@ class MapsViewModel(application: Application) : AndroidViewModel(application) {
 
         // 3. Get center tile
         val boundsStr = getMetadataValue(db, "bounds")
-        val (centerX, centerY) = if (boundsStr != null) {
-            val bounds = boundsStr.split(',').map { it.toDouble() }
+        val bounds = boundsStr
+            ?.split(',')
+            ?.mapNotNull { it.trim().toDoubleOrNull() }
+            ?.takeIf { it.size >= 4 }
+        val (centerX, centerY) = if (bounds != null) {
             val centerLon = (bounds[0] + bounds[2]) / 2
             val centerLat = (bounds[1] + bounds[3]) / 2
             // FIX: Convert lat/lon to tile coordinates, then convert Y to MBTiles row for the query
@@ -206,6 +220,11 @@ class MapsViewModel(application: Application) : AndroidViewModel(application) {
                 result = result?.substring(cut + 1)
             }
         }
-        return result ?: "map.mbtiles"
+        return sanitizeFileName(result ?: "map.mbtiles")
+    }
+
+    private fun sanitizeFileName(name: String): String {
+        val baseName = name.substringAfterLast('/').substringAfterLast('\\')
+        return baseName.replace(Regex("[^A-Za-z0-9._-]"), "_").ifBlank { "map.mbtiles" }
     }
 }

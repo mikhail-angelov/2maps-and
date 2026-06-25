@@ -83,28 +83,9 @@ class MapsLayerManager(private val context: Context, private val map: MapLibreMa
         }
 
         val styleJson = when (format) {
-            "png", "jpg" -> """
-            {
-              "version": 8,
-              "name": "Raster MBTiles",
-              "sources": {
-                "raster-tiles": {
-                  "type": "raster",
-                  "url": "mbtiles://${file.absolutePath}",
-                  "tileSize": 256
-                }
-              },
-              "layers": [
-                {
-                  "id": "simple-tiles",
-                  "type": "raster",
-                  "source": "raster-tiles",
-                  "minzoom": 0,
-                  "maxzoom": 22
-                }
-              ]
-            }
-            """.trimIndent()
+            "png", "jpg" -> context.assets?.open("raster_style.json")?.bufferedReader()
+                ?.use { it.readText() }
+                ?.replace("___FILE_URI___", "mbtiles://${file.absolutePath}")
 
             else -> context.assets?.open("bright.json")?.bufferedReader()?.use { it.readText() }
                 ?.replace(

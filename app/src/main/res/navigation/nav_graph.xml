@@ -18,10 +18,6 @@
             android:name="placemarkLng"
             app:argType="float"
             android:defaultValue="999.0" />
-        <argument
-            android:name="placemarkId"
-            app:argType="string"
-            android:defaultValue="" />
         <action
             android:id="@+id/action_mapFragment_to_mainMenuFragment"
             app:destination="@id/mainMenuFragment" />

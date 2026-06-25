@@ -12,12 +12,13 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.Toolbar
 import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import androidx.navigation.NavController
 import androidx.navigation.fragment.NavHostFragment
 import androidx.navigation.ui.AppBarConfiguration
 import androidx.navigation.ui.NavigationUI
 import com.bconf.a2maps_and.auth.AuthRepository
-import com.bconf.a2maps_and.navigation.NavigationEngineService
+import com.bconf.a2maps_and.location.LocationService
 import com.bconf.a2maps_and.placemark.PlacemarkService
 
 class MainActivity : AppCompatActivity() {
@@ -107,26 +108,23 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startLocationService() {
-        Intent(this, NavigationEngineService::class.java).also {
-            it.action = NavigationEngineService.ACTION_START_LOCATION_SERVICE
-            startService(it)
+        Intent(this, LocationService::class.java).also {
+            it.action = LocationService.ACTION_START_LOCATION_SERVICE
+            ContextCompat.startForegroundService(this, it)
         }
         Intent(this, PlacemarkService::class.java).also {
-            it.action = PlacemarkService.ACTION_START
             startService(it)
         }
     }
 
     private fun stopLocationService() {
-        // Create an explicit intent to stop the NavigationEngineService.
-        val stopIntent = Intent(this, NavigationEngineService::class.java)
+        // Create an explicit intent to stop the LocationService.
+        val stopIntent = Intent(this, LocationService::class.java)
         // Set an action that the service can listen for to know it should stop itself.
-        stopIntent.action = NavigationEngineService.ACTION_STOP_SERVICE
+        stopIntent.action = LocationService.ACTION_STOP_SERVICE
         startService(stopIntent)
-        // Also, explicitly call stopService to be safe.
-        stopService(stopIntent)
         // Log this action for debugging.
-        Log.i("MainActivity", "onDestroy called: Sent request to stop NavigationEngineService.")
+        Log.i("MainActivity", "onDestroy called: Sent request to stop LocationService.")
     }
 
 
@@ -148,6 +146,8 @@ class MainActivity : AppCompatActivity() {
      */
     override fun onDestroy() {
         super.onDestroy()
-        stopLocationService()
+        if (isFinishing) {
+            stopLocationService()
+        }
     }
 }

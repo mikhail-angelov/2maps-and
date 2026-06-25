@@ -7,11 +7,13 @@ import android.view.ViewGroup
 import androidx.core.view.isVisible
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.bconf.a2maps_and.databinding.FragmentGasStationListBinding
-import com.bconf.a2maps_and.navigation.NavigationViewModel
+import com.bconf.a2maps_and.location.LocationViewModel
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
@@ -21,7 +23,7 @@ class GasStationListFragment : Fragment() {
     private val binding get() = _binding!!
 
     private val placemarkViewModel: PlacemarksViewModel by activityViewModels()
-    private val navigationViewModel: NavigationViewModel by activityViewModels()
+    private val locationViewModel: LocationViewModel by activityViewModels()
     private lateinit var placemarkAdapter: PlacemarkAdapter
 
     override fun onCreateView(
@@ -44,8 +46,7 @@ class GasStationListFragment : Fragment() {
             onItemClicked = { item, _ ->
                 val action = PlacemarksFragmentDirections.actionPlacemarksFragmentToMapFragment(
                     placemarkLat = item.placemark.latitude.toFloat(),
-                    placemarkLng = item.placemark.longitude.toFloat(),
-                    placemarkId = item.placemark.id
+                    placemarkLng = item.placemark.longitude.toFloat()
                 )
                 findNavController().navigate(action)
             }
@@ -59,15 +60,18 @@ class GasStationListFragment : Fragment() {
 
     private fun observeViewModel() {
         viewLifecycleOwner.lifecycleScope.launch {
-            navigationViewModel.lastKnownGpsLocation.collectLatest { location ->
-                placemarkViewModel.updateCurrentLocation(location)
-            }
-        }
-
-        viewLifecycleOwner.lifecycleScope.launch {
-            placemarkViewModel.gasStationItems.collectLatest { displayItems ->
-                placemarkAdapter.submitList(displayItems)
-                binding.emptyView.isVisible = displayItems.isEmpty()
+            viewLifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                launch {
+                    locationViewModel.lastKnownGpsLocation.collectLatest { location ->
+                        placemarkViewModel.updateCurrentLocation(location)
+                    }
+                }
+                launch {
+                    placemarkViewModel.gasStationItems.collectLatest { displayItems ->
+                        placemarkAdapter.submitList(displayItems)
+                        binding.emptyView.isVisible = displayItems.isEmpty()
+                    }
+                }
             }
         }
     }

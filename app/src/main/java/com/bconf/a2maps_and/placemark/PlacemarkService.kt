@@ -5,7 +5,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.net.Uri
-import android.os.Binder
 import android.os.IBinder
 import android.util.Log
 import com.google.gson.Gson
@@ -28,7 +27,6 @@ import java.io.InputStreamReader
 
 class PlacemarkService : Service() {
 
-    private val binder = LocalBinder()
     private lateinit var placemarksFile: File
     private lateinit var gasStationsFile: File
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -44,7 +42,6 @@ class PlacemarkService : Service() {
     private data class Geometry(val type: String, val coordinates: List<Double>)
 
     companion object {
-        const val ACTION_START = "ACTION_START"
         const val ACTION_ADD_PLACEMARK = "ACTION_ADD_PLACEMARK"
         const val ACTION_UPDATE_PLACEMARK = "ACTION_UPDATE_PLACEMARK"
         const val ACTION_DELETE_PLACEMARK = "ACTION_DELETE_PLACEMARK"
@@ -68,10 +65,6 @@ class PlacemarkService : Service() {
         val isGasLayerVisible: StateFlow<Boolean> = _isGasLayerVisible.asStateFlow()
     }
 
-    inner class LocalBinder : Binder() {
-        fun getService(): PlacemarkService = this@PlacemarkService
-    }
-
     override fun onCreate() {
         super.onCreate()
         prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -86,10 +79,6 @@ class PlacemarkService : Service() {
         Log.d("PlacemarkService", "onStartCommand, action: ${intent?.action}")
 
         when (intent?.action) {
-            ACTION_START -> {
-                // Handle start action if needed
-            }
-
             ACTION_ADD_PLACEMARK -> {
                 intent.getStringExtra(EXTRA_PLACEMARK)?.let { placemarkJson ->
                     Gson().fromJson(placemarkJson, Placemark::class.java)?.let {
@@ -146,7 +135,7 @@ class PlacemarkService : Service() {
         return START_STICKY
     }
 
-    override fun onBind(intent: Intent): IBinder = binder
+    override fun onBind(intent: Intent): IBinder? = null
 
     override fun onDestroy() {
         super.onDestroy()
