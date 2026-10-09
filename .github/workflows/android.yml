@@ -58,6 +58,7 @@ jobs:
           api-level: 30
           target: google_apis
           arch: x86_64
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -feature -GLDirectMem,-Vulkan
           script: |
             mkdir -p "$RUNNER_TEMP/road-data"
             curl --fail --location --retry 2 https://brouter.de/brouter/segments4/E40_N55.rd5 --output "$RUNNER_TEMP/road-data/E40_N55.rd5"
@@ -65,7 +66,23 @@ jobs:
             adb shell mkdir -p /data/local/tmp/2maps-routing-test
             adb push "$RUNNER_TEMP/road-data/E40_N55.rd5" "$RUNNER_TEMP/road-data/E45_N55.rd5" /data/local/tmp/2maps-routing-test/
             adb shell chmod 644 /data/local/tmp/2maps-routing-test/E40_N55.rd5 /data/local/tmp/2maps-routing-test/E45_N55.rd5
-            ./gradlew --no-daemon :app:connectedDebugAndroidTest
+            if ! ./gradlew --no-daemon :app:connectedDebugAndroidTest; then
+              adb logcat -d > "$RUNNER_TEMP/android-logcat.txt"
+              adb logcat -d -s AndroidRuntime:E libc:F DEBUG:F
+              exit 1
+            fi
+
+      - name: Save Android test diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: android-test-diagnostics
+          path: |
+            app/build/reports/androidTests/
+            app/build/outputs/androidTest-results/
+            ${{ runner.temp }}/android-logcat.txt
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Save unsigned release APK
         env:
