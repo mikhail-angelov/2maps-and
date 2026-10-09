@@ -1,30 +1,48 @@
-# Offline car navigation
+# Offline car routing inside 2Maps
 
-2Maps calls the separately installed BRouter Android Binder service. Routing does
-not use HTTP or read BRouter storage. Map tiles and road routing data are separate.
-The implementation covers MVP slices 1–3 of the October 8, 2026 specification;
-turn instructions and voice guidance remain outside this MVP.
+BRouter 1.7.9's Java kernel is bundled in the APK. LocalRoutingClient implements
+the existing RoutingEngine Interface and calls the private EmbeddedRoutingService
+in the app's `:routing` process. No external BRouter application, GBox, HTTP
+router or account is needed for route calculation. The existing parser, matcher,
+arrival/reroute policy, maneuvers and map layers are reused.
 
 ## Setup
 
-1. Install [BRouter](https://f-droid.org/packages/btools.routingapp/) and launch it
-   once to initialize its base directory.
-2. Download road segments in BRouter's Download Manager. For Nizhny Novgorod city,
-   start with `E40_N55.rd5`. Trips outside that tile need adjacent segments.
-3. Check that BRouter has `profiles2/car-vario.brf`. The tested APK needed the
-   profile installed manually. The [official 1.7.9 release ZIP](https://github.com/abrensch/brouter/releases/download/v1.7.9/brouter-1.7.9.zip)
-   contains `profiles2/car-vario.brf` and `lookups.dat`; copy the matching profiles
-   to `brouter/profiles2` inside the base directory selected in BRouter.
-4. Allow precise location in 2Maps and enable GPS.
-5. Long press the map, select **Navigate to → Offline (BRouter)**. The same choice
-   is available on a placemark. Wait for a fresh fix (≤15 seconds, ≤50 m accuracy).
+1. Obtain road data `.rd5` files for the regions you travel through. Official
+   files: https://brouter.de/brouter/segments4/ . Nizhny Novgorod uses
+   `E40_N55.rd5`; routes east of 45° longitude may also need `E45_N55.rd5`.
+2. Open **Menu → Road data → Import .rd5 files** and select one or more files.
+   Imports validate names and file integrity, then replace files atomically.
+   Road data is stored in private `filesDir/routing/segments4`. Existing files
+   survive failed imports. Profiles/lookups are installed from bundled assets.
+3. Import a `.mbtiles` basemap through **Maps** when needed. Road graph files
+   and map tiles serve different purposes. The built-in basemap covers Malta.
+4. Long press the map or open a placemark and choose **Navigate to → Offline**.
+   Initial planning and explicit Retry start at the position shown on the map,
+   including a restored/coarse point. Precise GPS is not required to draw a route.
+   A missing segment is reported by filename with a **Road data** action.
 
-The orange route and target marker are separate from GPX tracks. The panel shows
-remaining geometric distance and approximate travel time. Stop clears navigation
-and restores the normal GPS interval without changing recording/follow modes.
-Navigation state survives screen recreation while the process remains alive.
-Navigation is supported with the map visible; screen-off/background guidance and
-recovery after process death are outside the MVP.
+Before starting, the app offers the main route and up to two distinct alternatives
+when available. Select a route on the map or in its card, then press **Go**.
+Alternative calculations do not block starting the already available main route.
+
+The top card shows the next maneuver and distance to it. The compact bottom
+panel keeps remaining time/distance on one line, with arrival time when space
+permits, a thin progress bar and a right-hand **×** to stop. A separate sign shows numeric
+posted speed limits when present. Roundabouts include supplied exit numbers.
+Unknown/symbolic speed limits remain hidden; profile estimated speeds are not
+shown as legal limits. Direction-specific tags override the general limit.
+
+Preview projects the displayed position onto the planned route for road details.
+Progress, arrival and automatic rerouting still require fixes ≤50 m and ≤15 s
+old. Navigation uses one system GPS subscription at a one-second interval;
+Stop restores normal Google/Huawei fused updates and preserves recording mode.
+Cancel/Stop terminates pending computation; new destinations replace old requests.
+The map and recording stay in the main process if the routing worker fails.
+The traversed route is muted and the remaining route highlighted. The position
+marker is a blue dot outside guidance and an arrow during guidance when the
+course is known. Background/screen-off guidance, voice and recovery after
+process death remain outside the current implementation.
 
 ## Verification
 
@@ -32,34 +50,24 @@ Use Java 17 on this machine:
 
 ```bash
 env JAVA_HOME=/Library/Java/JavaVirtualMachines/zulu-17.jdk/Contents/Home ./gradlew test
-env JAVA_HOME=/Library/Java/JavaVirtualMachines/zulu-17.jdk/Contents/Home ./gradlew assembleDebug
 ```
 
-The device integration tests need BRouter initialized with the car profile and
-`E40_N55.rd5`. Grant precise permission before running, and disable Wi-Fi/mobile
-data after setup to verify offline execution:
+Android routing tests need fixture files, but no external BRouter APK:
 
 ```bash
-adb shell pm grant com.bconf.a2maps_and android.permission.ACCESS_FINE_LOCATION
-adb shell pm grant com.bconf.a2maps_and android.permission.ACCESS_COARSE_LOCATION
+adb shell mkdir -p /data/local/tmp/2maps-routing-test
+adb push E40_N55.rd5 E45_N55.rd5 /data/local/tmp/2maps-routing-test/
+adb shell chmod 644 /data/local/tmp/2maps-routing-test/E40_N55.rd5 /data/local/tmp/2maps-routing-test/E45_N55.rd5
 env JAVA_HOME=/Library/Java/JavaVirtualMachines/zulu-17.jdk/Contents/Home ./gradlew connectedDebugAndroidTest
 ```
 
-`OfflineNavigationTest` checks a real Binder road route, the long-press chooser,
-route/track layer coexistence, MBTiles style switching, activity recreation and
-Stop with recording still enabled. The BRouter-dependent tests skip when the
-external APK is absent; a meaningful routing acceptance run requires it present.
-Controller tests cover late replies, destination changes, retries, permission
-recovery, GPS loss and reroute failures. Geometry/policy tests cover segment
-projection, high latitude, antimeridian, parallel roads, jitter and arrival.
+Tests import these streams through RoutingDataStore. CI downloads the same two
+fixture tiles before the Android suite, rather than skipping tests for a missing
+external app. The test folder is configurable through instrumentation argument
+`roadDataDir`. GPS mocks/replay belong on a test device.
 
-Physical driving, inter-tile trips, and the maximum usable Binder reply size on
-an older phone still require device acceptance. A too-large reply fails visibly
-and suggests a closer destination; it never falls back to a network router.
+## Dependency and architecture
 
-## Upstream interface
-
-The AIDL interface is copied from [BRouter's MIT-licensed source](https://github.com/abrensch/brouter/blob/master/brouter-routing-app/src/main/aidl/btools/routingapp/IBRouterService.aidl).
-Its notice is retained in [BRouter-LICENSE.txt](BRouter-LICENSE.txt).
-
-Local Android 11 results, screenshots and setup details: [VALIDATION.md](VALIDATION.md).
+Pinned JAR provenance/license: [third_party/brouter](../../third_party/brouter/README.md).
+Focused architecture choices and proposed follow-ups: [ARCHITECTURE.md](ARCHITECTURE.md).
+Local acceptance history and current embedded results: [VALIDATION.md](VALIDATION.md).

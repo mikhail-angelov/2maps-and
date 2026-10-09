@@ -14,7 +14,6 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <queries>
-        <package android:name="btools.routingapp" />
         <intent>
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="yandexnavi" />
@@ -45,6 +44,8 @@
             android:exported="false"
             android:foregroundServiceType="location" />
         <service android:name=".placemark.PlacemarkService" />
+        <service android:name=".navigation.EmbeddedRoutingService"
+            android:exported="false" android:process=":routing" />
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.provider"

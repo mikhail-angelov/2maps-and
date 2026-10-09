@@ -9,7 +9,9 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.location.Location
+import android.location.LocationListener
 import android.location.LocationManager
+import android.os.Bundle
 import android.os.IBinder
 import android.os.Looper
 import android.util.Log
@@ -48,6 +50,14 @@ class LocationService : Service() {
     private var isStopped = false
     private var navigationActive = false
     private var updatesStarted = false
+    private val gpsLocationManager by lazy { getSystemService(LocationManager::class.java) }
+    private val gpsLocationListener = object : LocationListener {
+        override fun onLocationChanged(location: Location) = onNewLocationLogic(location)
+        override fun onProviderEnabled(provider: String) = Unit
+        override fun onProviderDisabled(provider: String) = Unit
+        @Suppress("DEPRECATION")
+        override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) = Unit
+    }
 
     companion object {
         const val ACTION_SET_NAVIGATION_ACTIVE = "com.bconf.a2maps_and.action.SET_NAVIGATION_ACTIVE"
@@ -181,6 +191,20 @@ class LocationService : Service() {
         updatesStarted = true
         val requestedInterval = if (navigationActive) 1000L else LOCATION_UPDATE_INTERVAL
         val minimum = if (navigationActive) 1000L else FASTEST_LOCATION_INTERVAL
+        if (navigationActive) {
+            try {
+                gpsLocationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, requestedInterval, 0f,
+                    gpsLocationListener, Looper.getMainLooper())
+                Log.d("LocationService", "GPS location updates started for navigation.")
+            } catch (e: SecurityException) {
+                updatesStarted = false
+                Log.e("LocationService", "GPS location permission unavailable: ${e.message}")
+            } catch (e: Exception) {
+                updatesStarted = false
+                Log.e("LocationService", "Could not start GPS location updates: ${e.message}")
+            }
+            return
+        }
         if (checkGMS()) {
             try {
                 val locationRequestGMS =
@@ -224,6 +248,7 @@ class LocationService : Service() {
 
     private fun stopLocationUpdates() {
         updatesStarted = false
+        gpsLocationManager.removeUpdates(gpsLocationListener)
         try {
             if (checkGMS() && ::locationCallback.isInitialized) {
                 fusedLocationClient.removeLocationUpdates(locationCallback)

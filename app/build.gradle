@@ -59,6 +59,7 @@ android {
 }
 
 dependencies {
+    implementation files('../third_party/brouter/brouter-engine-1.7.9.jar')
     // Removed dependency versions that are managed by libs (libs.plugins)
     implementation libs.androidx.core.ktx
     implementation libs.androidx.appcompat
@@ -69,7 +70,7 @@ dependencies {
     implementation libs.androidx.navigation.ui.ktx
 
     // Map and Location
-    implementation 'org.maplibre.gl:android-sdk:11.8.0'
+    implementation 'org.maplibre.gl:android-sdk:11.8.4'
     implementation 'com.google.android.gms:play-services-location:21.2.0'
     implementation 'com.huawei.hms:location:6.12.0.300'
 

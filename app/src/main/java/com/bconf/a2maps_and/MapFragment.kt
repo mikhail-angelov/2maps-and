@@ -4,10 +4,11 @@ import android.Manifest
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.provider.Settings
-import android.widget.Button
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.core.net.toUri
+import androidx.constraintlayout.widget.ConstraintLayout
+import androidx.core.view.doOnLayout
 import androidx.core.view.isVisible
 import com.bconf.a2maps_and.navigation.*
 import android.annotation.SuppressLint
@@ -85,11 +86,13 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
     private val placemarkViewModel: PlacemarksViewModel by activityViewModels()
     private val trackViewModel: TrackViewModel by activityViewModels()
     private val navigationViewModel: NavigationViewModel by activityViewModels()
-    private val routeLayerManager = RouteLayerManager()
+    private var navigationPanel: NavigationPanel? = null
+    private val routeLayerManager = RouteLayerManager { route ->
+        route.estimatedDurationSeconds?.let { navigationPanel?.durationText(it) }.orEmpty()
+    }
     private val precisePermission = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
         navigationViewModel.retry()
     }
-    private var shownMissingBRouter = false
     private val mapsViewModel: MapsViewModel by activityViewModels()
 
     private var longPressedLatLng: LatLng? = null
@@ -116,6 +119,12 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
     private var lastBearingLocation: LatLng? = null
     private var currentHeadingBearing: Double? = null
     private var latestRecordedPath: List<LatLng> = emptyList()
+    /** Set by the compass: keep the chosen bearing instead of rotating with the course until re-centred. */
+    private var headingPaused = false
+    private var renderedNavigationPhase = NavigationPhase.IDLE
+    private var overviewOptionCount = 0
+    private var navigationLayoutActive: Boolean? = null
+    private val idleLayoutParams = mutableMapOf<Int, ConstraintLayout.LayoutParams>()
 
     companion object {
         internal var isMapRuntimeEnabled = true
@@ -134,6 +143,17 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         private const val FOLLOW_CAMERA_MIN_DISTANCE_METERS = 25.0
         private const val HEADING_MIN_DISTANCE_METERS = 8.0
         private const val HEADING_MIN_CHANGE_DEGREES = 12.0
+        private const val HEADING_GPS_MIN_CHANGE_DEGREES = 4.0
+        private const val HEADING_MIN_SPEED_MPS = 3.0
+        private const val HEADING_STOPPED_SPEED_MPS = 1.0
+        private const val HEADING_MAX_ACCURACY_METERS = 50.0
+        private const val HEADING_MAX_BEARING_ACCURACY_DEGREES = 30.0
+        private const val NAVIGATION_ZOOM = 16.0
+        private const val NAVIGATION_CAMERA_MS = 900
+        private const val NAVIGATION_CAMERA_MIN_INTERVAL_MS = 900L
+        // Marker position within the free map area between the cards; more road ahead than behind.
+        private const val NAVIGATION_MARKER_FRACTION = 0.67
+        private const val OPTION_TOUCH_SLOP_DP = 24
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -227,6 +247,7 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
             val cameraPosition = CameraPosition.Builder(map.cameraPosition)
                 .bearing(0.0)
                 .build()
+            headingPaused = true
             map.animateCamera(
                 CameraUpdateFactory.newCameraPosition(cameraPosition),
                 LOCATION_CAMERA_ANIMATION_MS
@@ -238,6 +259,7 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
     private fun setupLocationControls() {
         fabCenterOnLocation?.setOnClickListener {
             isUserPanning = false
+            headingPaused = false
             if (isRadialMenuOpen) {
                 closeRadialMenu()
             } else if (navigationViewModel.state.value.needsGps) {
@@ -248,7 +270,8 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         }
         fabCenterOnLocation?.setOnLongClickListener {
             isUserPanning = false
-            if (!isRadialMenuOpen && locationViewModel.locationMode.value == LocationMode.INACTIVE) {
+            if (!isRadialMenuOpen && locationViewModel.locationMode.value == LocationMode.INACTIVE &&
+                navigationViewModel.state.value.phase == NavigationPhase.IDLE) {
                 openRadialMenu()
             }
             true
@@ -274,7 +297,7 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
     }
 
     private fun setupGasLayerControls() {
-        fabToggleGasLayer?.visibility = View.VISIBLE
+        updateQuickActions()
         fabToggleGasLayer?.setOnClickListener {
             placemarkViewModel.toggleGasLayerVisibility()
         }
@@ -315,6 +338,7 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         observeLocationMode()
         observeRecordedPath()
         startTrackStatsTimer()
+        updateNavigationCamera(navigationViewModel.state.value)
     }
 
 
@@ -322,62 +346,123 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         precisePermission.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
     }
 
-    private fun openBRouter(install: Boolean) {
-        val intent = if (install) Intent(Intent.ACTION_VIEW, "https://f-droid.org/packages/btools.routingapp/".toUri())
-            else requireContext().packageManager.getLaunchIntentForPackage("btools.routingapp")
-                ?: Intent(Intent.ACTION_VIEW, "https://f-droid.org/packages/btools.routingapp/".toUri())
-        try { startActivity(intent) } catch (_: ActivityNotFoundException) {
-            AlertDialog.Builder(requireContext()).setMessage("Install BRouter from https://f-droid.org/packages/btools.routingapp/").setPositiveButton("OK", null).show()
+    private fun openRoadData() { findNavController().navigate(R.id.roadDataFragment) }
+
+    private fun setupNavigationPanel(root: View) {
+        val panel = NavigationPanel(root,
+            onStop = { navigationViewModel.stop() },
+            onRetry = { navigationViewModel.retry() },
+            onSetup = {
+                val state = navigationViewModel.state.value
+                when {
+                    state.phase == NavigationPhase.ERROR -> openRoadData()
+                    !navigationViewModel.hasPrecisePermission() -> requestPreciseLocation()
+                    else -> startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
+                }
+            },
+            onSelect = { navigationViewModel.select(it) },
+            onGo = { navigationViewModel.go() })
+        navigationPanel = panel
+        launchWhenStarted {
+            navigationViewModel.state.collect { state ->
+                panel.render(state, navigationViewModel.hasPrecisePermission())
+                routeLayerManager.render(state)
+                if (::mapsLayerManager.isInitialized) {
+                    locationViewModel.lastKnownGpsLocation.value?.let { updateCurrentLocationMarker(it) }
+                }
+                applyNavigationLayout(state.phase != NavigationPhase.IDLE)
+                updateNavigationCamera(state)
+            }
         }
     }
 
-    private fun setupNavigationPanel(root: View) {
-        val panel = root.findViewById<View>(R.id.navigationPanel)
-        val status = root.findViewById<TextView>(R.id.navigationStatus)
-        val retry = root.findViewById<Button>(R.id.navigationRetry)
-        val setup = root.findViewById<Button>(R.id.navigationSetup)
-        root.findViewById<Button>(R.id.navigationStop).setOnClickListener { navigationViewModel.stop() }
-        retry.setOnClickListener { navigationViewModel.retry() }
-        setup.setOnClickListener {
-            val state = navigationViewModel.state.value
-            when {
-                !navigationViewModel.hasPrecisePermission() -> requestPreciseLocation()
-                state.waitingForGps || state.phase == NavigationPhase.WAITING_GPS -> startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
-                else -> openBRouter(state.failure == RoutingFailure.UNAVAILABLE)
-            }
+    /** Moves map buttons out of the cards' way while navigating and hides actions not needed for driving. */
+    private fun applyNavigationLayout(active: Boolean) {
+        if (navigationLayoutActive == active) return
+        navigationLayoutActive = active
+        val root = view ?: return
+        val density = resources.displayMetrics.density
+        fun place(id: Int, change: ConstraintLayout.LayoutParams.() -> Unit) {
+            val target = root.findViewById<View>(id) ?: return
+            val idle = idleLayoutParams.getOrPut(id) { ConstraintLayout.LayoutParams(target.layoutParams as ConstraintLayout.LayoutParams) }
+            target.layoutParams = ConstraintLayout.LayoutParams(idle).apply { if (active) change() }
         }
-        launchWhenStarted {
-            navigationViewModel.state.collect { state ->
-                panel.isVisible = state.phase != NavigationPhase.IDLE
-                routeLayerManager.render(state)
-                retry.isVisible = state.phase == NavigationPhase.ERROR
-                setup.isVisible = state.phase == NavigationPhase.ERROR || state.waitingForGps || state.phase == NavigationPhase.WAITING_GPS
-                setup.setText(when {
-                    !navigationViewModel.hasPrecisePermission() -> R.string.navigation_precise
-                    state.waitingForGps || state.phase == NavigationPhase.WAITING_GPS -> R.string.navigation_gps_settings
-                    state.failure == RoutingFailure.UNAVAILABLE -> R.string.navigation_install_brouter
-                    else -> R.string.navigation_open_brouter
-                })
-                status.text = when (state.phase) {
-                    NavigationPhase.IDLE -> ""
-                    NavigationPhase.WAITING_GPS -> getString(R.string.navigation_waiting)
-                    NavigationPhase.CALCULATING -> getString(R.string.navigation_calculating)
-                    NavigationPhase.ARRIVED -> getString(R.string.navigation_arrived)
-                    NavigationPhase.ERROR -> if (state.route == null) state.message else getString(R.string.navigation_stale) + "\n" + state.message
-                    NavigationPhase.ACTIVE -> getString(R.string.navigation_distance, state.remainingMeters / 1000) +
-                        (state.remainingSeconds?.let { getString(R.string.navigation_duration, kotlin.math.ceil(it / 60).toInt()) } ?: "") +
-                        (if (state.isRerouting) "\n" + getString(R.string.navigation_rerouting) else "")
-                }
-                if (state.waitingForGps && state.route != null) status.append("\n" + getString(R.string.navigation_waiting))
-                if (state.failure == RoutingFailure.UNAVAILABLE && !shownMissingBRouter) {
-                    shownMissingBRouter = true
-                    AlertDialog.Builder(requireContext()).setMessage(R.string.navigation_requires)
-                        .setPositiveButton(R.string.navigation_install_brouter) { _, _ -> openBRouter(true) }
-                        .setNegativeButton("Cancel") { _, _ -> navigationViewModel.stop() }.show()
-                }
-                if (state.phase == NavigationPhase.IDLE) shownMissingBRouter = false
-            }
+        place(R.id.fabCompass) {
+            startToStart = ConstraintLayout.LayoutParams.UNSET
+            endToEnd = ConstraintLayout.LayoutParams.PARENT_ID
+            topToTop = ConstraintLayout.LayoutParams.UNSET
+            topToBottom = R.id.mainMenuButton
+            marginEnd = (24 * density).toInt()
+            topMargin = (12 * density).toInt()
         }
+        place(R.id.fabCenterOnLocationInFragment) {
+            bottomToBottom = ConstraintLayout.LayoutParams.UNSET
+            bottomToTop = R.id.navigationPanel
+        }
+        place(R.id.trackStatsText) {
+            bottomToBottom = ConstraintLayout.LayoutParams.UNSET
+            bottomToTop = R.id.navigationPanel
+        }
+        if (active) closeRadialMenu()
+        updateQuickActions()
+    }
+
+    private fun updateQuickActions() {
+        val navigating = navigationViewModel.state.value.phase != NavigationPhase.IDLE
+        fabToggleGasLayer?.isVisible = !navigating && !isRadialMenuOpen
+        fabHideTrack?.isVisible = !navigating && trackViewModel.trackPoints.value.isNotEmpty() &&
+            !locationViewModel.locationMode.value.isRecording()
+    }
+
+    private fun updateNavigationCamera(state: NavigationState) {
+        // The phase counts as shown only once the map can move; onMapReady replays the current state.
+        if (!::map.isInitialized) return
+        val previous = renderedNavigationPhase
+        renderedNavigationPhase = state.phase
+        when {
+            state.phase == NavigationPhase.SELECTING && (previous != NavigationPhase.SELECTING || state.options.size != overviewOptionCount) -> {
+                if (previous != NavigationPhase.SELECTING) isUserPanning = false
+                overviewOptionCount = state.options.size
+                if (!isUserPanning) showRouteOverview(state.options)
+            }
+            state.phase == NavigationPhase.ACTIVE && previous == NavigationPhase.SELECTING -> {
+                isUserPanning = false
+                headingPaused = false
+                locationViewModel.lastKnownGpsLocation.value?.let { updateCurrentLocationIndicatorAndCamera(it, true) }
+            }
+            state.phase == NavigationPhase.IDLE && previous != NavigationPhase.IDLE ->
+                map.moveCamera(CameraUpdateFactory.paddingTo(0.0, 0.0, 0.0, 0.0))
+        }
+        if (state.phase != NavigationPhase.SELECTING) overviewOptionCount = 0
+    }
+
+    /** Fits every offered route above the bottom panel. */
+    private fun showRouteOverview(options: List<Route>) {
+        val panel = navigationPanel ?: return
+        val points = options.flatMap { it.points }.map { LatLng(it.latitude, it.longitude) }
+        if (points.size < 2) return
+        panel.bottomCard.doOnLayout {
+            // Layout may complete after Go, Stop or a new set of options; only the still-shown selection is fitted.
+            val current = navigationViewModel.state.value
+            if (!::map.isInitialized || isUserPanning || current.phase != NavigationPhase.SELECTING || current.options != options) return@doOnLayout
+            val margin = (24 * resources.displayMetrics.density).toInt()
+            val top = (mainMenuButton?.bottom ?: 0) + margin
+            val bottom = mapView.height - panel.bottomCard.top + margin
+            map.animateCamera(CameraUpdateFactory.newLatLngBounds(LatLngBounds.Builder().includes(points).build(),
+                margin, top, margin, bottom.coerceAtLeast(margin)), CAMERA_ANIMATION_MS)
+        }
+    }
+
+    /** Camera padding that puts the followed position at about 2/3 of the free area between the cards. */
+    private fun navigationCameraPadding(): DoubleArray {
+        val panel = navigationPanel ?: return DoubleArray(4)
+        val height = mapView.height.toDouble()
+        if (height <= 0) return DoubleArray(4)
+        val top = if (panel.maneuverCard.isVisible) panel.maneuverCard.bottom.toDouble() else 0.0
+        val bottom = if (panel.bottomCard.isVisible && panel.bottomCard.height > 0) panel.bottomCard.top.toDouble() else height
+        val markerY = top + NAVIGATION_MARKER_FRACTION * (bottom - top)
+        // The camera centre lies midway between the paddings, so solve the top padding for markerY.
+        return doubleArrayOf(0.0, (2 * markerY - bottom).coerceAtLeast(0.0), 0.0, height - bottom)
     }
 
     private fun setupScaleBar() {
@@ -498,8 +583,8 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
             trackViewModel.trackPoints.collectLatest { points ->
                 val isVisibleTrack = points.isNotEmpty() &&
                         !locationViewModel.locationMode.value.isRecording()
-                fabHideTrack?.visibility = if (isVisibleTrack) View.VISIBLE else View.GONE
-                if (isVisibleTrack) zoomToRoute(points)
+                updateQuickActions()
+                if (isVisibleTrack && navigationViewModel.state.value.phase == NavigationPhase.IDLE) zoomToRoute(points)
             }
         }
     }
@@ -558,35 +643,34 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         location: Location,
         force: Boolean = false
     ) {
-        mapsLayerManager.updateCurrentLocation(
-            Point.fromLngLat(
-                location.longitude,
-                location.latitude
-            )
-        )
+        updateHeading(location)
+        updateCurrentLocationMarker(location)
 
         val state = locationViewModel.locationMode.value
-        if (isUserPanning && (System.currentTimeMillis() - lastUserInteractionTime > USER_INTERACTION_TIMEOUT_MS)) {
+        val navigation = navigationViewModel.state.value
+        val driving = navigation.needsGps
+        // While navigating, a gesture pauses following until the re-centre button; there is no timer.
+        if (isUserPanning && navigation.phase == NavigationPhase.IDLE &&
+            System.currentTimeMillis() - lastUserInteractionTime > USER_INTERACTION_TIMEOUT_MS) {
             isUserPanning = false
         }
         val lat = if (location.latitude == 0.0) DEFAULT_LOCATION_LAT else location.latitude
         val lng = if (location.longitude == 0.0) DEFAULT_LOCATION_LNG else location.longitude
         val currentLatLng = LatLng(lat, lng)
-        updateHeadingBearing(currentLatLng)
         if (force || !isLocationLoaded) {
             val zoom = when {
                 !isLocationLoaded -> locationViewModel.zoomLevel.value
+                force && driving -> map.cameraPosition.zoom.coerceAtLeast(NAVIGATION_ZOOM)
                 force -> map.cameraPosition.zoom.coerceAtLeast(DEFAULT_FOCUS_ZOOM)
                 else -> map.cameraPosition.zoom
             }
             isLocationLoaded = true
             lastFollowCameraTarget = currentLatLng
             lastFollowCameraUpdateTime = System.currentTimeMillis()
-            val bearing = currentHeadingBearing ?: map.cameraPosition.bearing
             val cameraBuilder = CameraPosition.Builder().target(currentLatLng)
                 .zoom(zoom)
-                .bearing(bearing)
-                .padding(0.0, 0.0, 0.0, 0.0)
+                .bearing(followBearing())
+                .padding(if (driving) navigationCameraPadding() else DoubleArray(4))
 
             if (!state.shouldFollowLocation()) {
                 cameraBuilder.tilt(0.0)
@@ -596,39 +680,75 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
                 CameraUpdateFactory.newCameraPosition(cameraBuilder.build()),
                 LOCATION_CAMERA_ANIMATION_MS
             )
-        } else if ((state.shouldFollowLocation() || navigationViewModel.state.value.needsGps) && !isUserPanning && shouldUpdateFollowCamera(currentLatLng)) {
+        } else if ((state.shouldFollowLocation() || driving) && navigation.phase != NavigationPhase.SELECTING &&
+            !isUserPanning && shouldUpdateFollowCamera(currentLatLng, driving)) {
             lastFollowCameraTarget = currentLatLng
             lastFollowCameraUpdateTime = System.currentTimeMillis()
             val cameraPosition = CameraPosition.Builder(map.cameraPosition)
                 .target(currentLatLng)
-                .bearing(currentHeadingBearing ?: map.cameraPosition.bearing)
-                .build()
-            map.moveCamera(CameraUpdateFactory.newCameraPosition(cameraPosition))
+                .bearing(followBearing())
+            if (driving) {
+                cameraPosition.padding(navigationCameraPadding())
+                map.easeCamera(CameraUpdateFactory.newCameraPosition(cameraPosition.build()), NAVIGATION_CAMERA_MS)
+            } else {
+                map.moveCamera(CameraUpdateFactory.newCameraPosition(cameraPosition.build()))
+            }
         }
     }
 
-    private fun updateHeadingBearing(currentLocation: LatLng) {
-        val lastLocation = lastBearingLocation
-        if (lastLocation == null) {
-            lastBearingLocation = currentLocation
-            return
-        }
-        val movement = distanceAndBearing(lastLocation, currentLocation)
-        if (movement.distanceMeters < HEADING_MIN_DISTANCE_METERS) return
-        lastBearingLocation = currentLocation
+    private fun updateCurrentLocationMarker(location: Location) {
+        val navigation = navigationViewModel.state.value
+        val guiding = navigation.phase == NavigationPhase.ACTIVE ||
+            (navigation.phase == NavigationPhase.ERROR && navigation.route != null)
+        mapsLayerManager.updateCurrentLocation(
+            Point.fromLngLat(location.longitude, location.latitude),
+            currentHeadingBearing.takeIf { guiding }
+        )
+    }
 
-        val nextBearing = normalizeBearing(movement.bearingDegrees)
+    private fun followBearing(): Double =
+        if (headingPaused) map.cameraPosition.bearing else currentHeadingBearing ?: map.cameraPosition.bearing
+
+    /**
+     * Single course source for the camera and the position arrow. A fresh GPS bearing at driving speed wins;
+     * otherwise the direction between accurate positions far enough apart. Stops and poor fixes keep the last course.
+     */
+    private fun updateHeading(location: Location) {
+        val accuracy = if (location.hasAccuracy()) location.accuracy.toDouble() else Double.MAX_VALUE
+        if (accuracy > HEADING_MAX_ACCURACY_METERS) return
+        val point = LatLng(location.latitude, location.longitude)
+        val stopped = location.hasSpeed() && location.speed < HEADING_STOPPED_SPEED_MPS
+        val gpsBearing = location.takeIf {
+            it.hasBearing() && it.hasSpeed() && it.speed > HEADING_MIN_SPEED_MPS &&
+                (!it.hasBearingAccuracy() || it.bearingAccuracyDegrees <= HEADING_MAX_BEARING_ACCURACY_DEGREES)
+        }?.bearing?.toDouble()
+        val nextBearing: Double
+        val minChange: Double
+        if (gpsBearing != null) {
+            nextBearing = normalizeBearing(gpsBearing)
+            minChange = HEADING_GPS_MIN_CHANGE_DEGREES
+        } else {
+            val lastLocation = lastBearingLocation
+            if (lastLocation == null || stopped) {
+                if (lastLocation == null) lastBearingLocation = point
+                return
+            }
+            val movement = distanceAndBearing(lastLocation, point)
+            if (movement.distanceMeters < maxOf(HEADING_MIN_DISTANCE_METERS, 2 * accuracy)) return
+            nextBearing = normalizeBearing(movement.bearingDegrees)
+            minChange = HEADING_MIN_CHANGE_DEGREES
+        }
+        lastBearingLocation = point
         val currentBearing = currentHeadingBearing
-        if (currentBearing == null ||
-            bearingDeltaDegrees(currentBearing, nextBearing) >= HEADING_MIN_CHANGE_DEGREES
-        ) {
+        if (currentBearing == null || bearingDeltaDegrees(currentBearing, nextBearing) >= minChange) {
             currentHeadingBearing = nextBearing
         }
     }
 
-    private fun shouldUpdateFollowCamera(target: LatLng): Boolean {
+    private fun shouldUpdateFollowCamera(target: LatLng, driving: Boolean): Boolean {
         val lastTarget = lastFollowCameraTarget ?: return true
         val now = System.currentTimeMillis()
+        if (driving) return now - lastFollowCameraUpdateTime >= NAVIGATION_CAMERA_MIN_INTERVAL_MS
         if (now - lastFollowCameraUpdateTime < FOLLOW_CAMERA_MIN_INTERVAL_MS) return false
         return distanceMeters(lastTarget, target) >= FOLLOW_CAMERA_MIN_DISTANCE_METERS
     }
@@ -756,11 +876,22 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         if (::gasLayerManager.isInitialized) gasLayerManager.cleanup()
         if (::trackLayerManager.isInitialized) trackLayerManager.cleanup()
         routeLayerManager.cleanup()
+        navigationPanel = null
+        navigationLayoutActive = null
+        idleLayoutParams.clear()
+        renderedNavigationPhase = NavigationPhase.IDLE
         isLocationLoaded = false
         if (isMapRuntimeEnabled && ::mapView.isInitialized) realMapView.onDestroy()
     }
 
     override fun onMapClick(point: LatLng): Boolean {
+        if (navigationViewModel.state.value.phase == NavigationPhase.SELECTING) {
+            val slop = OPTION_TOUCH_SLOP_DP * resources.displayMetrics.density
+            routeLayerManager.optionAt(map, map.projection.toScreenLocation(point), slop)?.let {
+                navigationViewModel.select(it)
+                return true
+            }
+        }
         if (placemarkLayerManager.handleMapClick(point)) return true
         if (gasLayerManager.handleMapClick(point)) return true
         return false
@@ -815,7 +946,7 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         isRadialMenuOpen = true
 
         // Hide gas layer button while radial menu is open
-        fabToggleGasLayer?.visibility = View.GONE
+        updateQuickActions()
 
         val items = radialItems
         val startDelayStep = radialMenuAnimDuration / items.size.coerceAtLeast(1)
@@ -860,7 +991,7 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
 
         isRadialMenuOpen = false
 
-        fabToggleGasLayer?.visibility = View.VISIBLE
+        updateQuickActions()
     }
 }
 

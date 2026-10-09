@@ -1,6 +1,38 @@
 # 2Maps-And Navigation App
 
-This is an advanced mapping and navigation application for Android, built with a focus on customizability and offline capabilities. It uses MapLibre for map rendering, allowing for flexible map styling and the use of custom or open map sources. The app provides a rich user experience with features for navigation, placemark management, and GPS track recording.
+Android maps, offline car navigation, placemarks and GPX recording. MapLibre
+renders imported MBTiles maps; the bundled BRouter engine calculates routes
+locally, without a separate BRouter application or an online routing service.
+
+## Start offline navigation
+
+1. Install the APK from [GitHub Releases](https://github.com/mikhail-angelov/2maps-and/releases).
+2. Import a `.mbtiles` map through **Maps**. The bundled map covers Malta;
+   import your region to see its streets.
+3. Download your region's `.rd5` files from the
+   [BRouter road-data directory](https://brouter.de/brouter/segments4/) and select
+   **Menu → Road data → Import .rd5 files**. Nizhny Novgorod uses `E40_N55.rd5`;
+   routes east of 45° longitude may also need `E45_N55.rd5`.
+4. Long press a destination or open a placemark and choose **Navigate to → Offline**.
+   Choose the main route or an available alternative, then tap **Go**.
+
+Road data and map tiles are separate: `.rd5` files calculate routes, while
+`.mbtiles` files draw the map. Once imported, both work offline. GPS improves
+progress and rerouting, but an already known position is enough to plan a route.
+
+During navigation, the top card shows the next maneuver and distance to it.
+A road sign shows the numeric speed limit when present in the road data.
+The bottom panel uses one line for remaining time/distance, with estimated
+arrival when space permits, a thin progress bar, and **×** on the right to stop.
+The camera follows ahead of the position; dragging the map pauses following
+until the center button is pressed. Outside guidance, the position is a blue dot.
+Yandex Navigator and OsmAnd handoff remain available.
+
+Time estimates do not include traffic. Voice instructions, lane guidance and
+background/screen-off navigation are not implemented. GPS quality still matters
+for reliable progress; initial route selection may refresh if the position changes
+substantially. See [navigation setup](docs/navigation/README.md) and
+[local validation](docs/navigation/VALIDATION.md).
 
 ## Key Features
 
@@ -40,10 +72,11 @@ This is an advanced mapping and navigation application for Android, built with a
 <td valign="top">
 
 **Turn-by-Turn Navigation:**
-- **Online(unfortunately) navigation:** App process route request/response from [https://github.com/valhalla/valhalla](https://github.com/valhalla/valhalla) server.
-- **Custom Routing Engine:** Implements its own navigation logic, likely using an external routing service like Valhalla via Retrofit.
-- **Off-Route Detection & Rerouting:** Automatically detects when the user has deviated from the path and provides an option to recalculate the route.
-- **Route Visualization:** Draws the calculated navigation path clearly on the map.
+- **Embedded BRouter:** Car routes are calculated offline in a separate app process.
+- **Route alternatives:** Up to three distinct routes before starting, depending on the road network.
+- **Visual guidance:** Next maneuver, distance, known speed limits, remaining time/distance and route progress.
+- **Automatic rerouting:** Confirmed deviations trigger recalculation when a fresh, accurate GPS position is available.
+- **Route visualization:** The traveled part is muted; the remaining route is highlighted.
 
 </td>
 </tr>
@@ -78,8 +111,8 @@ This is an advanced mapping and navigation application for Android, built with a
 - **Clear Track:** Provides an option to clear the currently recorded track from the map.
 
 **Location Services Integration:**
-- **Fused Location Provider:** Utilizes Google's Fused Location Provider (`play-services-location`) and is structured to potentially support others (like Huawei HMS) for accurate and efficient location updates.
-- **Current Location Indicator:** Shows the user's current location on the map.
+- **Location providers:** Google/Huawei fused updates for normal use, system GPS updates during navigation.
+- **Current Location Indicator:** A blue dot outside guidance; a direction arrow during guidance when a course is known.
 - **"Center on Me" Functionality:** A floating action button allows the user to re-center the map on their current GPS location.
 
   </td>
@@ -124,9 +157,10 @@ This project is licensed under the MIT License.
 `.github/workflows/android.yml` follows the release flow used in `../tune`:
 all branches and pull requests run tests, lint, release assembly and Android 11
 UI tests. The unsigned APK is retained as a CI artifact for seven days.
-BRouter integration tests require BRouter and its profiles/road segments; they
-skip on the CI emulator where BRouter is not installed. Local routing acceptance
-is documented in [docs/navigation/VALIDATION.md](docs/navigation/VALIDATION.md).
+Routing tests use the embedded BRouter kernel. CI downloads E40_N55/E45_N55
+road-data fixtures before running the Android suite; no external routing APK is
+required. Local phone acceptance is documented in
+[docs/navigation/VALIDATION.md](docs/navigation/VALIDATION.md).
 
 A pushed tag such as `v1.2.3` signs the successful build and creates or updates a
 GitHub Release with `2Maps-v1.2.3.apk`. CI sets `versionName` from the tag and
@@ -143,6 +177,6 @@ Repository Actions secrets (same names as Tune):
 - `ANDROID_SIGNING_KEY_PASSWORD`: signing key password.
 
 Signing happens only in the tag release job. Builds need no signing secrets.
-For a signed local build, set `SIGNING_KEY_FILE`, `KEY_STORE_PASSWORD`,
+Use Java 17 for local Gradle builds. For a signed local build, set `SIGNING_KEY_FILE`, `KEY_STORE_PASSWORD`,
 `SIGNING_KEY_ALIAS` and `SIGNING_KEY_PASSWORD` before `./gradlew assembleRelease`.
 The key store and passwords must stay outside Git.

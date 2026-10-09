@@ -12,7 +12,7 @@ object ExternalNavigationChooser {
     fun show(context: Context, lat: Double, lng: Double, onOffline: () -> Unit) {
         AlertDialog.Builder(context)
             .setTitle("Navigate via")
-            .setItems(arrayOf("Yandex Navigator", "OsmAnd", "Offline (BRouter)")) { _, which ->
+            .setItems(arrayOf("Yandex Navigator", "OsmAnd", "Offline")) { _, which ->
                 when (which) {
                     0 -> openYandexNavigator(context, lat, lng)
                     1 -> openOsmAnd(context, lat, lng)

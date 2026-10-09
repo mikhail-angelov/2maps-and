@@ -43,6 +43,8 @@
             app:destination="@id/mapsFragment"
             app:popUpTo="@id/mainMenuFragment"
             app:popUpToInclusive="true" />
+        <action android:id="@+id/action_mainMenuFragment_to_roadDataFragment"
+            app:destination="@id/roadDataFragment" app:popUpTo="@id/mainMenuFragment" app:popUpToInclusive="true" />
     </fragment>
 
     <fragment
@@ -73,4 +75,6 @@
             android:id="@+id/action_mapsFragment_to_mapFragment"
             app:destination="@id/mapFragment" />
     </fragment>
+    <fragment android:id="@+id/roadDataFragment" android:name="com.bconf.a2maps_and.navigation.RoadDataFragment"
+        android:label="@string/road_data_title" tools:layout="@layout/fragment_road_data" />
 </navigation>

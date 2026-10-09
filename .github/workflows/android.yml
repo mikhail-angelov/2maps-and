@@ -58,7 +58,14 @@ jobs:
           api-level: 30
           target: google_apis
           arch: x86_64
-          script: ./gradlew --no-daemon :app:connectedDebugAndroidTest
+          script: |
+            mkdir -p "$RUNNER_TEMP/road-data"
+            curl --fail --location --retry 2 https://brouter.de/brouter/segments4/E40_N55.rd5 --output "$RUNNER_TEMP/road-data/E40_N55.rd5"
+            curl --fail --location --retry 2 https://brouter.de/brouter/segments4/E45_N55.rd5 --output "$RUNNER_TEMP/road-data/E45_N55.rd5"
+            adb shell mkdir -p /data/local/tmp/2maps-routing-test
+            adb push "$RUNNER_TEMP/road-data/E40_N55.rd5" "$RUNNER_TEMP/road-data/E45_N55.rd5" /data/local/tmp/2maps-routing-test/
+            adb shell chmod 644 /data/local/tmp/2maps-routing-test/E40_N55.rd5 /data/local/tmp/2maps-routing-test/E45_N55.rd5
+            ./gradlew --no-daemon :app:connectedDebugAndroidTest
 
       - name: Save unsigned release APK
         env:

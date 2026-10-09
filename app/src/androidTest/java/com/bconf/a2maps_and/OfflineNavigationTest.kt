@@ -2,7 +2,11 @@ package com.bconf.a2maps_and
 
 import android.Manifest
 import android.location.Location
+import android.location.Criteria
+import android.location.LocationManager
 import android.os.ParcelFileDescriptor
+import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
 import androidx.lifecycle.ViewModelProvider
 import androidx.navigation.fragment.NavHostFragment
@@ -26,10 +30,11 @@ import com.google.android.gms.location.LocationServices
 import com.google.android.gms.tasks.Tasks
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
-import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.hamcrest.Matchers.startsWith
+import org.hamcrest.Matchers.containsString
 import java.io.File
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -38,49 +43,110 @@ import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
 
-/** BRouter integration requires manual data/profile setup; see docs/navigation/README.md. */
+/** Bundled routing needs E40_N55/E45_N55 fixtures; see docs/navigation/README.md. */
 @RunWith(AndroidJUnit4::class)
 class OfflineNavigationTest {
     private val instrumentation get() = InstrumentationRegistry.getInstrumentation()
     private val context get() = instrumentation.targetContext
     private val fused by lazy { LocationServices.getFusedLocationProviderClient(context) }
+    private val gps by lazy { context.getSystemService(LocationManager::class.java) }
     private val origin = GeoPoint(56.292374, 43.985402)
     private val target = GeoPoint(56.2965, 43.9955)
+    private val gpsReplayHandler = Handler(Looper.getMainLooper())
+    @Volatile private var gpsReplayLocation: Location? = null
+    private val gpsReplay = object : Runnable {
+        override fun run() {
+            gpsReplayLocation?.let { previous ->
+                gps.setTestProviderLocation(LocationManager.GPS_PROVIDER, Location(previous).apply {
+                    time = System.currentTimeMillis()
+                    elapsedRealtimeNanos = SystemClock.elapsedRealtimeNanos()
+                })
+            }
+            gpsReplayHandler.postDelayed(this, 1000)
+        }
+    }
 
     @Before fun permissions() {
         instrumentation.uiAutomation.grantRuntimePermission(context.packageName, Manifest.permission.ACCESS_FINE_LOCATION)
         instrumentation.uiAutomation.grantRuntimePermission(context.packageName, Manifest.permission.ACCESS_COARSE_LOCATION)
         shell("appops set ${context.packageName} android:mock_location allow")
+        val data = RoutingDataStore(context)
+        val source = InstrumentationRegistry.getArguments().getString("roadDataDir") ?: "/data/local/tmp/2maps-routing-test"
+        for (name in listOf("E40_N55.rd5", "E45_N55.rd5")) {
+            if (!java.io.File(data.directory, name).exists()) {
+                val descriptor = instrumentation.uiAutomation.executeShellCommand("cat $source/$name")
+                ParcelFileDescriptor.AutoCloseInputStream(descriptor).use { data.importSegment(name, it) }
+            }
+        }
     }
 
     @Test fun localBinderBuildsRealCarRoute() = runBlocking {
-        requireBRouter()
+        requireRoadData()
         val start = SystemClock.elapsedRealtime()
-        val route = BRouterClient(context).route(origin, target)
+        val route = LocalRoutingClient(context).route(origin, target, 0)
         assertTrue(route.points.size > 2)
         assertTrue(route.distanceMeters > 100)
         assertNotNull(route.estimatedDurationSeconds)
+        assertTrue(route.maneuvers.isNotEmpty())
+        assertEquals(20, route.roadSections.first().maxSpeedKmh)
         assertTrue(distanceMeters(route.points.first(), origin) < 250)
         assertTrue(distanceMeters(route.points.last(), target) < 250)
         println("Offline Binder route: ${route.points.size} points, ${route.distanceMeters.toInt()} m, ${SystemClock.elapsedRealtime() - start} ms")
     }
 
+    @Test fun alternativeIndexReturnsRouteForSameRequest() = runBlocking {
+        requireRoadData()
+        val client = LocalRoutingClient(context)
+        val main = client.route(origin, target, 0)
+        val alternative = client.route(origin, target, 1)
+        assertTrue(alternative.points.size >= 2)
+        assertTrue(distanceMeters(alternative.points.last(), target) < 250)
+        println("BRouter alternative 1 distinct from main: ${RouteSimilarity.isDistinct(alternative, listOf(main))}")
+    }
+
     @Test fun routeCrosses45DegreeTileBoundary() = runBlocking {
-        requireBRouter()
+        requireRoadData()
         val start = SystemClock.elapsedRealtime()
-        val route = BRouterClient(context).route(GeoPoint(56.028, 44.995), GeoPoint(56.030, 45.015))
+        val route = LocalRoutingClient(context).route(GeoPoint(56.028, 44.995), GeoPoint(56.030, 45.015), 0)
         assertTrue(route.points.any { it.longitude < 45 })
         assertTrue(route.points.any { it.longitude >= 45 })
         assertTrue(route.distanceMeters > 500)
         println("Inter-tile route: ${route.points.size} points, ${route.distanceMeters.toInt()} m, ${SystemClock.elapsedRealtime() - start} ms")
     }
 
+    @Test fun missingSegmentsLeadToRoadDataInsteadOfExternalInstallation() = runBlocking {
+        val data = RoutingDataStore(context)
+        val original = File(data.directory, "E40_N55.rd5")
+        val hidden = File(data.directory, "E40_N55.rd5.test-backup")
+        assertTrue(original.renameTo(hidden))
+        try {
+            LocalRoutingClient(context).route(origin, target, 0)
+            fail("Expected missing segment")
+        } catch (error: RoutingException) {
+            assertEquals(RoutingFailure.SETUP, error.kind)
+            assertTrue(error.message!!.contains("E40_N55.rd5"))
+            assertTrue(error.message!!.contains("Road data"))
+        } finally { assertTrue(hidden.renameTo(original)) }
+    }
+
+    @Test fun roadDataScreenListsImportedSegments() {
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity {
+                val host = it.supportFragmentManager.findFragmentById(R.id.nav_host_fragment) as NavHostFragment
+                host.navController.navigate(R.id.action_mapFragment_to_mainMenuFragment)
+                host.navController.navigate(R.id.action_mainMenuFragment_to_roadDataFragment)
+            }
+            onView(withId(R.id.roadDataFiles)).check(matches(withText(containsString("E40_N55.rd5"))))
+            onView(withId(R.id.importRoadData)).check(matches(isEnabled()))
+        }
+    }
+
     @Test fun mapShowsRealRouteReroutesSurvivesStyleAndRecreationAndPreservesRecording() {
-        requireBRouter()
+        requireRoadData()
         val imported = File(context.filesDir, "maps/integration-map.mbtiles")
         imported.parentFile!!.mkdirs()
         context.assets.open("planet.mbtiles").use { input -> imported.outputStream().use { input.copyTo(it) } }
-        Tasks.await(fused.setMockMode(true))
+        startMockLocations()
         try {
             ActivityScenario.launch(MainActivity::class.java).use { scenario ->
                 lateinit var vm: NavigationViewModel
@@ -146,13 +212,13 @@ class OfflineNavigationTest {
                 println("Recording retained $recordedCount points across navigation and reroute; Stop preserved recording")
             }
         } finally {
-            Tasks.await(fused.setMockMode(false))
+            stopMockLocations()
         }
     }
 
     @Test fun placemarkListStartsOfflineNavigationAndReturnsToMap() {
-        requireBRouter()
-        Tasks.await(fused.setMockMode(true))
+        requireRoadData()
+        startMockLocations()
         try {
             ActivityScenario.launch(MainActivity::class.java).use { scenario ->
                 lateinit var vm: NavigationViewModel
@@ -172,7 +238,7 @@ class OfflineNavigationTest {
                 SystemClock.sleep(500)
                 onView(withText("Offline fixture")).perform(click())
                 onView(withId(R.id.navigateButton)).perform(click())
-                onView(withText("Offline (BRouter)")).perform(click())
+                onView(withText("Offline")).perform(click())
                 mockPosition(origin)
                 waitForRoute(vm)
                 scenario.onActivity {
@@ -184,7 +250,7 @@ class OfflineNavigationTest {
                 scenario.onActivity { ViewModelProvider(it)[PlacemarksViewModel::class.java].deletePlacemark(placemark.id) }
             }
         } finally {
-            Tasks.await(fused.setMockMode(false))
+            stopMockLocations()
         }
     }
 
@@ -197,23 +263,76 @@ class OfflineNavigationTest {
             onView(withText("Navigate to")).perform(click())
             onView(withText("Yandex Navigator")).check(matches(isDisplayed()))
             onView(withText("OsmAnd")).check(matches(isDisplayed()))
-            onView(withText("Offline (BRouter)")).check(matches(isDisplayed()))
+            onView(withText("Offline")).check(matches(isDisplayed()))
             pressBack()
         }
     }
 
+    @Test fun coarseMapPositionBuildsPreviewWithoutGpsSettingsPrompt() {
+        requireRoadData()
+        startMockLocations()
+        try {
+            ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+                lateinit var vm: NavigationViewModel
+                scenario.onActivity { vm = ViewModelProvider(it)[NavigationViewModel::class.java] }
+                mockPosition(origin, accuracy = 215f)
+                val deadline = SystemClock.elapsedRealtime() + 15000
+                while (LocationService.lastLocation.value.accuracy != 215f && SystemClock.elapsedRealtime() < deadline) {
+                    SystemClock.sleep(100)
+                }
+                assertEquals(215f, LocationService.lastLocation.value.accuracy)
+                scenario.onActivity { vm.start(target) }
+                waitForRoute(vm)
+                assertTrue(vm.state.value.waitingForGps)
+                assertTrue(distanceMeters(vm.state.value.route!!.points.first(), origin) < 250)
+                onView(withId(R.id.navigationStatus)).check(matches(withEffectiveVisibility(Visibility.GONE)))
+                onView(withId(R.id.navigationSummary)).check(matches(isDisplayed()))
+                onView(withId(R.id.navigationManeuverCard)).check(matches(isDisplayed()))
+                onView(withId(R.id.navigationSpeedLimit)).check(matches(withText("20")))
+                onView(withId(R.id.navigationSetup)).check(matches(withEffectiveVisibility(Visibility.GONE)))
+                onView(withId(R.id.navigationStop)).perform(click())
+            }
+        } finally {
+            stopMockLocations()
+        }
+    }
+
     private fun mockPosition(point: GeoPoint, accuracy: Float = 5f) {
-        Tasks.await(fused.setMockLocation(Location("fused").apply {
+        val fix = Location(LocationManager.GPS_PROVIDER).apply {
             latitude = point.latitude
             longitude = point.longitude
             this.accuracy = accuracy
             time = System.currentTimeMillis()
             elapsedRealtimeNanos = SystemClock.elapsedRealtimeNanos()
-        }))
+        }
+        gpsReplayLocation = fix
+        gps.setTestProviderLocation(LocationManager.GPS_PROVIDER, fix)
+        Tasks.await(fused.setMockLocation(Location(fix).apply { provider = "fused" }))
     }
 
-    private fun requireBRouter() = assumeTrue("Install BRouter and road data for this test",
-        context.packageManager.getLaunchIntentForPackage("btools.routingapp") != null)
+    @Suppress("DEPRECATION")
+    private fun startMockLocations() {
+        gps.addTestProvider(LocationManager.GPS_PROVIDER, false, false, false, false, true, true, true,
+            Criteria.POWER_LOW, Criteria.ACCURACY_FINE)
+        gps.setTestProviderEnabled(LocationManager.GPS_PROVIDER, true)
+        Tasks.await(fused.setMockMode(true))
+        gpsReplayHandler.post(gpsReplay)
+    }
+
+    private fun stopMockLocations() {
+        try { Tasks.await(fused.setMockMode(false)) }
+        finally {
+            instrumentation.runOnMainSync {
+                gpsReplayHandler.removeCallbacks(gpsReplay)
+                gpsReplayLocation = null
+                gps.removeTestProvider(LocationManager.GPS_PROVIDER)
+            }
+        }
+    }
+
+    private fun requireRoadData() {
+        assertTrue("Import road data test fixtures", RoutingDataStore(context).segments().size >= 2)
+    }
 
     private fun shell(command: String) {
         val descriptor = instrumentation.uiAutomation.executeShellCommand(command)
@@ -227,9 +346,15 @@ class OfflineNavigationTest {
         assertEquals(NavigationPhase.ACTIVE, vm.state.value.phase)
     }
 
+    /** Waits for the route choice, starts the main option with Go and waits for driving. */
     private fun waitForRoute(vm: NavigationViewModel) {
         val limit = SystemClock.elapsedRealtime() + 45000
-        while (SystemClock.elapsedRealtime() < limit && vm.state.value.phase != NavigationPhase.ACTIVE && vm.state.value.phase != NavigationPhase.ERROR) SystemClock.sleep(250)
+        fun waitFor(vararg phases: NavigationPhase) {
+            while (SystemClock.elapsedRealtime() < limit && vm.state.value.phase !in phases && vm.state.value.phase != NavigationPhase.ERROR) SystemClock.sleep(250)
+        }
+        waitFor(NavigationPhase.SELECTING, NavigationPhase.ACTIVE)
+        if (vm.state.value.phase == NavigationPhase.SELECTING) onView(withId(R.id.navigationGo)).perform(click())
+        waitFor(NavigationPhase.ACTIVE)
         assertEquals(vm.state.value.message, NavigationPhase.ACTIVE, vm.state.value.phase)
     }
 
