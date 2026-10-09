@@ -180,3 +180,7 @@ Signing happens only in the tag release job. Builds need no signing secrets.
 Use Java 17 for local Gradle builds. For a signed local build, set `SIGNING_KEY_FILE`, `KEY_STORE_PASSWORD`,
 `SIGNING_KEY_ALIAS` and `SIGNING_KEY_PASSWORD` before `./gradlew assembleRelease`.
 The key store and passwords must stay outside Git.
+
+The bundled `planet.mbtiles` is stored in Git LFS. Install Git LFS and run
+`git lfs pull` after cloning; the asset must be a SQLite database, not an LFS
+pointer file. CI downloads LFS assets during checkout.
