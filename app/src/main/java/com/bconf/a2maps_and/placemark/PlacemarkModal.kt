@@ -20,6 +20,8 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.navigation.fragment.findNavController
 import com.bconf.a2maps_and.external.ExternalNavigationChooser
+import com.bconf.a2maps_and.navigation.GeoPoint
+import com.bconf.a2maps_and.navigation.NavigationViewModel
 import com.bconf.a2maps_and.R
 import com.bconf.a2maps_and.databinding.BottomSheetPlacemarkBinding
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
@@ -33,6 +35,8 @@ class PlacemarkModal : BottomSheetDialogFragment() {
 
     // Use activityViewModels to share the ViewModel with the hosting fragments
     private val placemarkViewModel: PlacemarksViewModel by activityViewModels()
+
+    private val navigationViewModel: NavigationViewModel by activityViewModels()
 
     private var placemarkId: String? = null
 
@@ -120,7 +124,14 @@ class PlacemarkModal : BottomSheetDialogFragment() {
         }
 
         binding.navigateButton.setOnClickListener {
-            ExternalNavigationChooser.show(requireContext(), placemark.latitude, placemark.longitude)
+            ExternalNavigationChooser.show(requireContext(), placemark.latitude, placemark.longitude) {
+                navigationViewModel.start(GeoPoint(placemark.latitude, placemark.longitude))
+                val controller = findNavController()
+                if (controller.currentDestination?.id != R.id.mapFragment) {
+                    controller.popBackStack(R.id.mapFragment, false)
+                }
+                dismiss()
+            }
         }
         binding.shareButton.setOnClickListener {
             val lat = placemark.latitude

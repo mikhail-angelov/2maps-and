@@ -151,4 +151,27 @@
         tools:text="1.24 km | 12:34"
         tools:visibility="visible" />
 
+
+    <LinearLayout
+        android:id="@+id/navigationPanel"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="12dp"
+        android:layout_marginEnd="12dp"
+        android:layout_marginTop="88dp"
+        android:background="#EEFFFFFF"
+        android:orientation="vertical"
+        android:padding="12dp"
+        android:visibility="gone"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent">
+        <TextView android:id="@+id/navigationStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#222222" android:textSize="16sp" />
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
+            <Button android:id="@+id/navigationRetry" android:layout_weight="1" android:layout_width="0dp" android:layout_height="wrap_content" android:text="@string/navigation_retry" />
+            <Button android:id="@+id/navigationSetup" android:layout_weight="1" android:layout_width="0dp" android:layout_height="wrap_content" android:text="@string/navigation_open_brouter" />
+            <Button android:id="@+id/navigationStop" android:layout_weight="1" android:layout_width="0dp" android:layout_height="wrap_content" android:text="@string/navigation_stop" />
+        </LinearLayout>
+    </LinearLayout>
+
 </androidx.constraintlayout.widget.ConstraintLayout>

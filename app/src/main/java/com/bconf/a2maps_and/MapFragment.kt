@@ -1,5 +1,15 @@
 package com.bconf.a2maps_and
 
+import android.Manifest
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.provider.Settings
+import android.widget.Button
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
+import androidx.core.net.toUri
+import androidx.core.view.isVisible
+import com.bconf.a2maps_and.navigation.*
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.res.ColorStateList
@@ -74,6 +84,12 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
     private val locationViewModel: LocationViewModel by activityViewModels()
     private val placemarkViewModel: PlacemarksViewModel by activityViewModels()
     private val trackViewModel: TrackViewModel by activityViewModels()
+    private val navigationViewModel: NavigationViewModel by activityViewModels()
+    private val routeLayerManager = RouteLayerManager()
+    private val precisePermission = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+        navigationViewModel.retry()
+    }
+    private var shownMissingBRouter = false
     private val mapsViewModel: MapsViewModel by activityViewModels()
 
     private var longPressedLatLng: LatLng? = null
@@ -189,6 +205,9 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
                     is PopupItem.Map -> mapsLayerManager.loadMapStyleFromFile(selectedItem.mapItem.file) { style ->
                         placemarkLayerManager.onStyleLoaded(style)
                         gasLayerManager.onStyleLoaded(style)
+                        trackLayerManager.setupTrackLayer(style)
+                        routeLayerManager.onStyleLoaded(style)
+                        locationViewModel.lastKnownGpsLocation.value?.let { updateCurrentLocationIndicatorAndCamera(it) }
                     }
                 }
                 popupWindow.dismiss()
@@ -221,6 +240,8 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
             isUserPanning = false
             if (isRadialMenuOpen) {
                 closeRadialMenu()
+            } else if (navigationViewModel.state.value.needsGps) {
+                locationViewModel.lastKnownGpsLocation.value?.let { updateCurrentLocationIndicatorAndCamera(it, true) }
             } else if (locationViewModel.locationMode.value != LocationMode.INACTIVE) {
                 locationViewModel.onCenterButtonClicked()
             }
@@ -280,6 +301,7 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
             mapsDir.mkdirs()
         }
         mapsViewModel.loadMaps(mapsDir)
+        setupNavigationPanel(view)
     }
 
     override fun onMapReady(mapLibreMap: MapLibreMap) {
@@ -293,6 +315,69 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         observeLocationMode()
         observeRecordedPath()
         startTrackStatsTimer()
+    }
+
+
+    private fun requestPreciseLocation() {
+        precisePermission.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+    }
+
+    private fun openBRouter(install: Boolean) {
+        val intent = if (install) Intent(Intent.ACTION_VIEW, "https://f-droid.org/packages/btools.routingapp/".toUri())
+            else requireContext().packageManager.getLaunchIntentForPackage("btools.routingapp")
+                ?: Intent(Intent.ACTION_VIEW, "https://f-droid.org/packages/btools.routingapp/".toUri())
+        try { startActivity(intent) } catch (_: ActivityNotFoundException) {
+            AlertDialog.Builder(requireContext()).setMessage("Install BRouter from https://f-droid.org/packages/btools.routingapp/").setPositiveButton("OK", null).show()
+        }
+    }
+
+    private fun setupNavigationPanel(root: View) {
+        val panel = root.findViewById<View>(R.id.navigationPanel)
+        val status = root.findViewById<TextView>(R.id.navigationStatus)
+        val retry = root.findViewById<Button>(R.id.navigationRetry)
+        val setup = root.findViewById<Button>(R.id.navigationSetup)
+        root.findViewById<Button>(R.id.navigationStop).setOnClickListener { navigationViewModel.stop() }
+        retry.setOnClickListener { navigationViewModel.retry() }
+        setup.setOnClickListener {
+            val state = navigationViewModel.state.value
+            when {
+                !navigationViewModel.hasPrecisePermission() -> requestPreciseLocation()
+                state.waitingForGps || state.phase == NavigationPhase.WAITING_GPS -> startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
+                else -> openBRouter(state.failure == RoutingFailure.UNAVAILABLE)
+            }
+        }
+        launchWhenStarted {
+            navigationViewModel.state.collect { state ->
+                panel.isVisible = state.phase != NavigationPhase.IDLE
+                routeLayerManager.render(state)
+                retry.isVisible = state.phase == NavigationPhase.ERROR
+                setup.isVisible = state.phase == NavigationPhase.ERROR || state.waitingForGps || state.phase == NavigationPhase.WAITING_GPS
+                setup.setText(when {
+                    !navigationViewModel.hasPrecisePermission() -> R.string.navigation_precise
+                    state.waitingForGps || state.phase == NavigationPhase.WAITING_GPS -> R.string.navigation_gps_settings
+                    state.failure == RoutingFailure.UNAVAILABLE -> R.string.navigation_install_brouter
+                    else -> R.string.navigation_open_brouter
+                })
+                status.text = when (state.phase) {
+                    NavigationPhase.IDLE -> ""
+                    NavigationPhase.WAITING_GPS -> getString(R.string.navigation_waiting)
+                    NavigationPhase.CALCULATING -> getString(R.string.navigation_calculating)
+                    NavigationPhase.ARRIVED -> getString(R.string.navigation_arrived)
+                    NavigationPhase.ERROR -> if (state.route == null) state.message else getString(R.string.navigation_stale) + "\n" + state.message
+                    NavigationPhase.ACTIVE -> getString(R.string.navigation_distance, state.remainingMeters / 1000) +
+                        (state.remainingSeconds?.let { getString(R.string.navigation_duration, kotlin.math.ceil(it / 60).toInt()) } ?: "") +
+                        (if (state.isRerouting) "\n" + getString(R.string.navigation_rerouting) else "")
+                }
+                if (state.waitingForGps && state.route != null) status.append("\n" + getString(R.string.navigation_waiting))
+                if (state.failure == RoutingFailure.UNAVAILABLE && !shownMissingBRouter) {
+                    shownMissingBRouter = true
+                    AlertDialog.Builder(requireContext()).setMessage(R.string.navigation_requires)
+                        .setPositiveButton(R.string.navigation_install_brouter) { _, _ -> openBRouter(true) }
+                        .setNegativeButton("Cancel") { _, _ -> navigationViewModel.stop() }.show()
+                }
+                if (state.phase == NavigationPhase.IDLE) shownMissingBRouter = false
+            }
+        }
     }
 
     private fun setupScaleBar() {
@@ -378,6 +463,7 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
             placemarkLayerManager.onStyleLoaded(style)
             gasLayerManager.onStyleLoaded(style)
             trackLayerManager.setupTrackLayer(style)
+            routeLayerManager.onStyleLoaded(style)
             focusInitialPlacemark()
         })
     }
@@ -510,7 +596,7 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
                 CameraUpdateFactory.newCameraPosition(cameraBuilder.build()),
                 LOCATION_CAMERA_ANIMATION_MS
             )
-        } else if (state.shouldFollowLocation() && !isUserPanning && shouldUpdateFollowCamera(currentLatLng)) {
+        } else if ((state.shouldFollowLocation() || navigationViewModel.state.value.needsGps) && !isUserPanning && shouldUpdateFollowCamera(currentLatLng)) {
             lastFollowCameraTarget = currentLatLng
             lastFollowCameraUpdateTime = System.currentTimeMillis()
             val cameraPosition = CameraPosition.Builder(map.cameraPosition)
@@ -669,6 +755,7 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         if (::placemarkLayerManager.isInitialized) placemarkLayerManager.cleanup()
         if (::gasLayerManager.isInitialized) gasLayerManager.cleanup()
         if (::trackLayerManager.isInitialized) trackLayerManager.cleanup()
+        routeLayerManager.cleanup()
         isLocationLoaded = false
         if (isMapRuntimeEnabled && ::mapView.isInitialized) realMapView.onDestroy()
     }
@@ -702,7 +789,10 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         longPressedLatLng?.let { coords ->
             when (item.itemId) {
                 ID_MENU_NAVIGATE -> {
-                    ExternalNavigationChooser.show(requireContext(), coords.latitude, coords.longitude)
+                    ExternalNavigationChooser.show(requireContext(), coords.latitude, coords.longitude) {
+                        navigationViewModel.start(GeoPoint(coords.latitude, coords.longitude))
+                        if (!navigationViewModel.hasPrecisePermission()) requestPreciseLocation()
+                    }
                     return true
                 }
 

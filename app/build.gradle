@@ -12,33 +12,36 @@ android {
         applicationId "com.bconf.a2maps_and"
         minSdk 29
         targetSdk 34
-        versionCode 1
-        versionName "1.0"
+        versionCode = (System.getenv("MAPS_VERSION_CODE") ?: "1").toInteger()
+        versionName = System.getenv("MAPS_VERSION_NAME") ?: "1.0"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
 
     }
 
     signingConfigs {
-        release {
-            // Read signing configuration from environment variables
-            // provided by the GitHub Actions workflow.
-            storeFile file(System.getenv("SIGNING_KEY_FILE") ?: 'release-keystore.keystore')
-            storePassword System.getenv("KEY_STORE_PASSWORD") ?: 'test'
-            keyAlias '2maps-and.bconf'
-            keyPassword System.getenv("SIGNING_KEY_PASSWORD") ?: 'test'
+        if (System.getenv("SIGNING_KEY_FILE")) {
+            release {
+                storeFile file(System.getenv("SIGNING_KEY_FILE"))
+                storePassword System.getenv("KEY_STORE_PASSWORD")
+                keyAlias System.getenv("SIGNING_KEY_ALIAS")
+                keyPassword System.getenv("SIGNING_KEY_PASSWORD")
+            }
         }
     }
 
     buildFeatures {
         viewBinding true
+        aidl true
     }
 
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-            signingConfig signingConfigs.release
+            if (System.getenv("SIGNING_KEY_FILE")) {
+                signingConfig signingConfigs.release
+            }
         }
     }
     compileOptions {
@@ -85,6 +88,7 @@ dependencies {
     implementation 'androidx.annotation:annotation:1.7.1' // Updated version
 
     // Testing
+    testImplementation 'org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3'
     testImplementation libs.junit
     testImplementation libs.androidx.test.core
     testImplementation libs.androidx.junit

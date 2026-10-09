@@ -1,3 +1,17 @@
 <resources>
     <string name="app_name">2maps-and</string>
+    <string name="navigation_retry">Retry</string>
+    <string name="navigation_open_brouter">Open BRouter</string>
+    <string name="navigation_install_brouter">Install BRouter</string>
+    <string name="navigation_stop">Stop navigation</string>
+    <string name="navigation_waiting">Waiting for accurate GPS</string>
+    <string name="navigation_precise">Allow precise location</string>
+    <string name="navigation_gps_settings">GPS settings</string>
+    <string name="navigation_calculating">Calculating route…</string>
+    <string name="navigation_arrived">Destination reached</string>
+    <string name="navigation_rerouting">Recalculating route…</string>
+    <string name="navigation_stale">Route unavailable — retrying</string>
+    <string name="navigation_distance">%1$.2f km remaining</string>
+    <string name="navigation_duration"> · ≈ %1$d min</string>
+    <string name="navigation_requires">Offline routing requires BRouter. Install it, launch it, check car-vario and download the road segments for your trip.</string>
 </resources>

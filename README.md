@@ -117,3 +117,32 @@ out;
 ## 📜 License
 
 This project is licensed under the MIT License.
+
+
+## Android CI and releases
+
+`.github/workflows/android.yml` follows the release flow used in `../tune`:
+all branches and pull requests run tests, lint, release assembly and Android 11
+UI tests. The unsigned APK is retained as a CI artifact for seven days.
+BRouter integration tests require BRouter and its profiles/road segments; they
+skip on the CI emulator where BRouter is not installed. Local routing acceptance
+is documented in [docs/navigation/VALIDATION.md](docs/navigation/VALIDATION.md).
+
+A pushed tag such as `v1.2.3` signs the successful build and creates or updates a
+GitHub Release with `2Maps-v1.2.3.apk`. CI sets `versionName` from the tag and
+`versionCode` to the workflow run number plus one. Branch builds use
+`0.0.<run number>` as their version name. Local builds default to version `1.0`
+and code `1`; both can be overridden with `MAPS_VERSION_NAME` and
+`MAPS_VERSION_CODE`.
+
+Repository Actions secrets (same names as Tune):
+
+- `ANDROID_SIGNING_KEY_BASE64`: base64-encoded PKCS12/JKS private key store.
+- `ANDROID_SIGNING_STORE_PASSWORD`: key store password.
+- `ANDROID_SIGNING_KEY_ALIAS`: signing key alias (`tune` for the provided key).
+- `ANDROID_SIGNING_KEY_PASSWORD`: signing key password.
+
+Signing happens only in the tag release job. Builds need no signing secrets.
+For a signed local build, set `SIGNING_KEY_FILE`, `KEY_STORE_PASSWORD`,
+`SIGNING_KEY_ALIAS` and `SIGNING_KEY_PASSWORD` before `./gradlew assembleRelease`.
+The key store and passwords must stay outside Git.

@@ -26,17 +26,17 @@ class AuthRepositoryTest {
     }
 
     @Test
-    fun `init should not crash`() {
+    fun initShouldNotCrash() {
         assertNotNull(context)
     }
 
     @Test
-    fun `isLoggedIn returns false when no token`() {
+    fun isLoggedInReturnsFalseWhenNoToken() {
         assertFalse(AuthRepository.isLoggedIn())
     }
 
     @Test
-    fun `save and retrieve auth token`() {
+    fun saveAndRetrieveAuthToken() {
         AuthRepository.saveAuth("test-token-123", "user-1", "test@test.com")
         assertTrue(AuthRepository.isLoggedIn())
         assertEquals("test-token-123", AuthRepository.getToken())
@@ -45,7 +45,7 @@ class AuthRepositoryTest {
     }
 
     @Test
-    fun `clearAuth removes all stored data`() {
+    fun clearAuthRemovesAllStoredData() {
         AuthRepository.saveAuth("token", "uid", "e@e.com")
         AuthRepository.clearAuth()
         assertFalse(AuthRepository.isLoggedIn())
@@ -55,7 +55,7 @@ class AuthRepositoryTest {
     }
 
     @Test
-    fun `login request serialization`() {
+    fun loginRequestSerialization() {
         val request = LoginRequest("user@test.com", "pass123")
         val json = Gson().toJson(request)
         assertTrue(json.contains("user@test.com"))
@@ -63,7 +63,7 @@ class AuthRepositoryTest {
     }
 
     @Test
-    fun `signup request serialization`() {
+    fun signupRequestSerialization() {
         val request = SignUpRequest("Test User", "user@test.com", "pass123")
         val json = Gson().toJson(request)
         assertTrue(json.contains("Test User"))
@@ -71,7 +71,7 @@ class AuthRepositoryTest {
     }
 
     @Test
-    fun `server placemark can be serialized`() {
+    fun serverPlacemarkCanBeSerialized() {
         val mark = ServerPlacemark(
             id = "abc-123",
             name = "Test",

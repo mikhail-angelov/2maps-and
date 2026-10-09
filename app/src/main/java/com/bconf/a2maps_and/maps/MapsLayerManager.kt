@@ -16,6 +16,7 @@ import java.io.IOException
 class MapsLayerManager(private val context: Context, private val map: MapLibreMap) {
 
     private var currentLocationSource: GeoJsonSource? = null
+    private var currentLocationPoint: Point? = null
 
     companion object {
         private const val CURRENT_LOCATION_SOURCE_ID = "current-location-source"
@@ -102,9 +103,8 @@ class MapsLayerManager(private val context: Context, private val map: MapLibreMa
         map.setStyle(
             Style.Builder().fromJson(styleJson)
         ) { style ->
-            onStyleLoaded?.invoke(style)
-
             setupLocationDisplay(style)
+            onStyleLoaded?.invoke(style)
         }
     }
 
@@ -112,6 +112,7 @@ class MapsLayerManager(private val context: Context, private val map: MapLibreMa
         // Create a source for the current location
         currentLocationSource = GeoJsonSource(CURRENT_LOCATION_SOURCE_ID)
         style.addSource(currentLocationSource!!)
+        currentLocationPoint?.let { currentLocationSource?.setGeoJson(it) }
 
         // Create a layer to display the current location
         val locationLayer = CircleLayer(CURRENT_LOCATION_LAYER_ID, CURRENT_LOCATION_SOURCE_ID)
@@ -126,6 +127,7 @@ class MapsLayerManager(private val context: Context, private val map: MapLibreMa
     }
 
     fun updateCurrentLocation(point: Point) {
-        currentLocationSource?.setGeoJson(point)
+        currentLocationPoint = point
+        if (map.style?.isFullyLoaded == true) currentLocationSource?.setGeoJson(point)
     }
 }

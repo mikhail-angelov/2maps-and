@@ -32,6 +32,7 @@ class TrackLayerManager(
     private val sourceId = "track-source"
     private val layerId = "track-layer"
     private var layer: LineLayer? = null
+    private var observing = false
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
 
@@ -51,7 +52,15 @@ class TrackLayerManager(
 
         style.addSource(source)
         style.addLayer(layer!!)
-        observeTracks()
+        val points = trackViewModel.trackPoints.value
+        if (points.isNotEmpty()) {
+            source.setGeoJson(LineString.fromLngLats(points.map { Point.fromLngLat(it.longitude, it.latitude) }))
+            layer?.setProperties(PropertyFactory.visibility(Property.VISIBLE))
+        }
+        if (!observing) {
+            observing = true
+            observeTracks()
+        }
     }
 
     fun cleanup() {
@@ -62,6 +71,7 @@ class TrackLayerManager(
         scope.launch {
             lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 trackViewModel.trackPoints.collectLatest { trackPoints ->
+                    if (map.style?.isFullyLoaded != true) return@collectLatest
                     Log.d("TrackLayerManager", "Observed ${trackPoints.size} trackPoints.")
                     if (trackPoints.isNotEmpty()) {
                         val mapboxPoints =

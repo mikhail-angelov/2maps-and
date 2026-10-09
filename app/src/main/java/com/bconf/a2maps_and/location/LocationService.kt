@@ -46,8 +46,12 @@ class LocationService : Service() {
 
     private lateinit var gpxLogger: GpxLogger
     private var isStopped = false
+    private var navigationActive = false
+    private var updatesStarted = false
 
     companion object {
+        const val ACTION_SET_NAVIGATION_ACTIVE = "com.bconf.a2maps_and.action.SET_NAVIGATION_ACTIVE"
+        const val EXTRA_NAVIGATION_ACTIVE = "navigation_active"
         const val ACTION_SET_LOCATION_MODE =
             "com.bconf.a2maps_and.action.SET_LOCATION_MODE"
         const val ACTION_START_LOCATION_SERVICE = "ACTION_START_LOCATION_SERVICE"
@@ -139,10 +143,6 @@ class LocationService : Service() {
             time = prefs.getLong(KEY_LAST_TIME, 0L)
         }
         _lastLocation.value = location
-        Log.d(
-            "LocationService",
-            "Restored last location: ${location.latitude}, ${location.longitude}"
-        )
     }
 
     private fun checkGMS(): Boolean {
@@ -162,10 +162,6 @@ class LocationService : Service() {
             locationCallback = object : LocationCallback() {
                 override fun onLocationResult(locationResult: LocationResult) {
                     locationResult.lastLocation?.let { location ->
-                        Log.d(
-                            "LocationService",
-                            "GMS Location: ${location.latitude}, ${location.longitude}, ${location.accuracy}"
-                        )
                         onNewLocationLogic(location)
                     }
                 }
@@ -174,10 +170,6 @@ class LocationService : Service() {
             huaweiLocationCallback = object : com.huawei.hms.location.LocationCallback() {
                 override fun onLocationResult(locationResult: com.huawei.hms.location.LocationResult?) {
                     locationResult?.lastLocation?.let { location ->
-                        Log.d(
-                            "LocationService",
-                            "HMS Location: ${location.latitude}, ${location.longitude}, ${location.accuracy}"
-                        )
                         onNewLocationLogic(location)
                     }
                 }
@@ -186,13 +178,16 @@ class LocationService : Service() {
     }
 
     private fun startLocationUpdates() {
+        updatesStarted = true
+        val requestedInterval = if (navigationActive) 1000L else LOCATION_UPDATE_INTERVAL
+        val minimum = if (navigationActive) 1000L else FASTEST_LOCATION_INTERVAL
         if (checkGMS()) {
             try {
                 val locationRequestGMS =
                     com.google.android.gms.location.LocationRequest.Builder(
                         com.google.android.gms.location.Priority.PRIORITY_HIGH_ACCURACY,
-                        LOCATION_UPDATE_INTERVAL
-                    ).setMinUpdateIntervalMillis(FASTEST_LOCATION_INTERVAL).build()
+                        requestedInterval
+                    ).setMinUpdateIntervalMillis(minimum).build()
                 fusedLocationClient.requestLocationUpdates(
                     locationRequestGMS,
                     locationCallback,
@@ -206,11 +201,11 @@ class LocationService : Service() {
             }
         }
 
-        if (checkHMS()) {
+        else if (checkHMS()) {
             try {
                 val locationRequestHMS = com.huawei.hms.location.LocationRequest().apply {
-                    interval = LOCATION_UPDATE_INTERVAL
-                    fastestInterval = FASTEST_LOCATION_INTERVAL
+                    interval = requestedInterval
+                    fastestInterval = minimum
                     priority = com.huawei.hms.location.LocationRequest.PRIORITY_HIGH_ACCURACY
                 }
                 huaweiFusedLocationClient.requestLocationUpdates(
@@ -228,6 +223,7 @@ class LocationService : Service() {
     }
 
     private fun stopLocationUpdates() {
+        updatesStarted = false
         try {
             if (checkGMS() && ::locationCallback.isInitialized) {
                 fusedLocationClient.removeLocationUpdates(locationCallback)
@@ -253,7 +249,18 @@ class LocationService : Service() {
         when (intent?.action) {
             ACTION_START_LOCATION_SERVICE -> {
                 startForegroundServiceWithNotification()
-                startLocationUpdates()
+                if (!updatesStarted) startLocationUpdates()
+            }
+
+            ACTION_SET_NAVIGATION_ACTIVE -> {
+                val active = intent.getBooleanExtra(EXTRA_NAVIGATION_ACTIVE, false)
+                if (navigationActive != active) {
+                    navigationActive = active
+                    if (updatesStarted) {
+                        stopLocationUpdates()
+                        startLocationUpdates()
+                    }
+                }
             }
 
             ACTION_SET_LOCATION_MODE -> {
