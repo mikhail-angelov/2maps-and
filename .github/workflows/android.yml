@@ -66,11 +66,7 @@ jobs:
             adb shell mkdir -p /data/local/tmp/2maps-routing-test
             adb push "$RUNNER_TEMP/road-data/E40_N55.rd5" "$RUNNER_TEMP/road-data/E45_N55.rd5" /data/local/tmp/2maps-routing-test/
             adb shell chmod 644 /data/local/tmp/2maps-routing-test/E40_N55.rd5 /data/local/tmp/2maps-routing-test/E45_N55.rd5
-            if ! ./gradlew --no-daemon :app:connectedDebugAndroidTest; then
-              adb logcat -d > "$RUNNER_TEMP/android-logcat.txt"
-              adb logcat -d -s AndroidRuntime:E libc:F DEBUG:F
-              exit 1
-            fi
+            ./gradlew --no-daemon :app:connectedDebugAndroidTest || { adb logcat -d > "$RUNNER_TEMP/android-logcat.txt"; adb logcat -d -s AndroidRuntime:E libc:F DEBUG:F; exit 1; }
 
       - name: Save Android test diagnostics
         if: failure()
