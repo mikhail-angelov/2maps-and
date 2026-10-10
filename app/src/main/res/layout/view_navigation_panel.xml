@@ -5,93 +5,109 @@
     xmlns:tools="http://schemas.android.com/tools"
     tools:parentTag="androidx.constraintlayout.widget.ConstraintLayout">
 
+    <!-- Compact maneuver card: arrow and distance only, offline data has no street names. -->
     <com.google.android.material.card.MaterialCardView
         android:id="@+id/navigationManeuverCard"
-        android:layout_width="0dp"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginStart="12dp"
         android:layout_marginTop="12dp"
-        android:layout_marginEnd="12dp"
+        android:layout_marginEnd="8dp"
         android:visibility="gone"
-        app:cardBackgroundColor="@color/nav_card"
-        app:cardCornerRadius="16dp"
-        app:cardElevation="4dp"
+        app:cardBackgroundColor="@color/nav_accent"
+        app:cardCornerRadius="20dp"
+        app:cardElevation="8dp"
         app:strokeWidth="0dp"
-        app:layout_constraintEnd_toStartOf="@id/mainMenuButton"
+        app:layout_constrainedWidth="true"
+        app:layout_constraintEnd_toStartOf="@id/navigationSpeedBlock"
         app:layout_constraintHorizontal_bias="0"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintWidth_default="wrap"
-        app:layout_constraintWidth_max="280dp"
         tools:visibility="visible">
 
         <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:gravity="center_vertical"
+            android:minHeight="80dp"
             android:orientation="horizontal"
-            android:padding="12dp">
+            android:paddingStart="16dp"
+            android:paddingTop="10dp"
+            android:paddingEnd="22dp"
+            android:paddingBottom="10dp">
 
             <ImageView
                 android:id="@+id/navigationManeuverIcon"
-                android:layout_width="52dp"
-                android:layout_height="52dp"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
                 android:importantForAccessibility="no"
-                app:tint="@color/nav_accent"
+                app:tint="@color/nav_on_accent"
                 tools:src="@drawable/ic_maneuver_left" />
 
-            <LinearLayout
-                android:id="@+id/navigationManeuverTextBlock"
+            <TextView
+                android:id="@+id/navigationManeuverDistance"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="12dp"
-                android:orientation="vertical">
-
-                <TextView
-                    android:id="@+id/navigationManeuverDistance"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:maxLines="1"
-                    android:textColor="@color/nav_text"
-                    android:textSize="30sp"
-                    android:textStyle="bold"
-                    tools:text="350 m" />
-
-                <TextView
-                    android:id="@+id/navigationManeuver"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:ellipsize="end"
-                    android:maxLines="2"
-                    android:textColor="@color/nav_text"
-                    android:textSize="17sp"
-                    tools:text="Turn right" />
-            </LinearLayout>
+                android:includeFontPadding="false"
+                android:maxLines="1"
+                android:textColor="@color/nav_on_accent"
+                android:textSize="42sp"
+                android:textStyle="bold"
+                tools:text="1.3 km" />
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
 
-    <TextView
-        android:id="@+id/navigationSpeedLimit"
-        android:layout_width="56dp"
-        android:layout_height="56dp"
-        android:layout_marginStart="12dp"
+    <!-- Current speed and the posted limit, side by side in the top-right corner. -->
+    <LinearLayout
+        android:id="@+id/navigationSpeedBlock"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
         android:layout_marginTop="12dp"
-        android:background="@drawable/bg_speed_limit"
-        android:elevation="4dp"
-        android:gravity="center"
-        android:maxLines="1"
-        android:padding="8dp"
-        android:textColor="#000000"
-        android:textStyle="bold"
+        android:layout_marginEnd="8dp"
+        android:clipToPadding="false"
+        android:orientation="horizontal"
+        android:padding="4dp"
         android:visibility="gone"
-        app:autoSizeMaxTextSize="24sp"
-        app:autoSizeMinTextSize="12sp"
-        app:autoSizeTextType="uniform"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/navigationManeuverCard"
-        app:layout_goneMarginTop="12dp"
-        tools:text="60"
-        tools:visibility="visible" />
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        tools:visibility="visible">
+
+        <TextView
+            android:id="@+id/navigationCurrentSpeed"
+            android:layout_width="60dp"
+            android:layout_height="60dp"
+            android:background="@drawable/bg_current_speed"
+            android:elevation="4dp"
+            android:gravity="center"
+            android:includeFontPadding="false"
+            android:maxLines="1"
+            android:padding="8dp"
+            android:textColor="@color/nav_text"
+            android:textStyle="bold"
+            app:autoSizeMaxTextSize="26sp"
+            app:autoSizeMinTextSize="12sp"
+            app:autoSizeTextType="uniform"
+            tools:text="54" />
+
+        <TextView
+            android:id="@+id/navigationSpeedLimit"
+            android:layout_width="60dp"
+            android:layout_height="60dp"
+            android:layout_marginStart="6dp"
+            android:background="@drawable/bg_speed_limit"
+            android:elevation="4dp"
+            android:gravity="center"
+            android:includeFontPadding="false"
+            android:maxLines="1"
+            android:padding="10dp"
+            android:textColor="@color/nav_text"
+            android:textStyle="bold"
+            app:autoSizeMaxTextSize="24sp"
+            app:autoSizeMinTextSize="12sp"
+            app:autoSizeTextType="uniform"
+            tools:text="60" />
+    </LinearLayout>
 
     <com.google.android.material.card.MaterialCardView
         android:id="@+id/navigationPanel"
@@ -100,8 +116,8 @@
         android:layout_margin="12dp"
         android:visibility="gone"
         app:cardBackgroundColor="@color/nav_card"
-        app:cardCornerRadius="16dp"
-        app:cardElevation="6dp"
+        app:cardCornerRadius="24dp"
+        app:cardElevation="8dp"
         app:strokeWidth="0dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
@@ -113,58 +129,72 @@
             android:layout_height="wrap_content"
             android:orientation="vertical">
 
+            <!-- One row like the reference: distance, arrival and time over the progress bar, then Stop. -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:gravity="center_vertical"
-                android:minHeight="64dp"
+                android:minHeight="76dp"
                 android:orientation="horizontal"
-                android:paddingStart="16dp"
+                android:paddingStart="20dp"
                 android:paddingTop="8dp"
-                android:paddingEnd="4dp"
+                android:paddingEnd="12dp"
                 android:paddingBottom="8dp">
 
-                <FrameLayout
+                <LinearLayout
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:layout_marginEnd="8dp"
-                    android:layout_weight="1">
+                    android:layout_marginEnd="12dp"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
 
-                    <TextView
-                        android:id="@+id/navigationSummary"
+                    <FrameLayout
                         android:layout_width="match_parent"
-                        android:layout_height="48dp"
-                        android:gravity="center_vertical"
-                        android:maxLines="1"
-                        android:ellipsize="end"
-                        android:textColor="@color/nav_text"
-                        android:textSize="20sp"
-                        android:textStyle="bold"
-                        app:autoSizeMaxTextSize="20sp"
-                        app:autoSizeMinTextSize="14sp"
-                        app:autoSizeTextType="uniform"
-                        tools:text="12 min · 8.4 km" />
+                        android:layout_height="wrap_content">
 
-                    <TextView
-                        android:id="@+id/navigationStatus"
+                        <TextView
+                            android:id="@+id/navigationSummary"
+                            android:layout_width="match_parent"
+                            android:layout_height="40dp"
+                            android:gravity="center_vertical"
+                            android:maxLines="1"
+                            android:textColor="@color/nav_text"
+                            android:textSize="26sp"
+                            android:textStyle="bold"
+                            app:autoSizeMaxTextSize="26sp"
+                            app:autoSizeMinTextSize="14sp"
+                            app:autoSizeTextType="uniform"
+                            tools:text="4.7 km  14:31  7 min" />
+
+                        <TextView
+                            android:id="@+id/navigationStatus"
+                            android:layout_width="match_parent"
+                            android:layout_height="40dp"
+                            android:gravity="center_vertical"
+                            android:maxLines="1"
+                            android:ellipsize="end"
+                            android:textColor="@color/nav_text_secondary"
+                            android:textSize="16sp"
+                            android:visibility="gone"
+                            app:autoSizeMaxTextSize="16sp"
+                            app:autoSizeMinTextSize="12sp"
+                            app:autoSizeTextType="uniform" />
+                    </FrameLayout>
+
+                    <com.bconf.a2maps_and.navigation.RouteProgressBar
+                        android:id="@+id/navigationRouteProgress"
                         android:layout_width="match_parent"
-                        android:layout_height="48dp"
-                        android:gravity="center_vertical"
-                        android:maxLines="1"
-                        android:ellipsize="end"
-                        android:textColor="@color/nav_text_secondary"
-                        android:textSize="16sp"
+                        android:layout_height="16dp"
+                        android:layout_marginTop="2dp"
                         android:visibility="gone"
-                        app:autoSizeMaxTextSize="16sp"
-                        app:autoSizeMinTextSize="12sp"
-                        app:autoSizeTextType="uniform" />
-                </FrameLayout>
+                        tools:visibility="visible" />
+                </LinearLayout>
 
                 <ImageButton
                     android:id="@+id/navigationStop"
-                    android:layout_width="48dp"
-                    android:layout_height="48dp"
-                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:layout_width="52dp"
+                    android:layout_height="52dp"
+                    android:background="@drawable/bg_navigation_stop"
                     android:contentDescription="@string/navigation_stop"
                     android:src="@drawable/ic_close"
                     app:tint="@color/nav_text" />
@@ -213,11 +243,13 @@
                     android:textSize="18sp" />
             </LinearLayout>
 
+            <!-- Indeterminate only, while a route is being calculated. -->
             <com.google.android.material.progressindicator.LinearProgressIndicator
                 android:id="@+id/navigationProgress"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:max="1000"
+                android:indeterminate="true"
+                android:visibility="gone"
                 app:indicatorColor="@color/nav_accent"
                 app:trackColor="@color/nav_track"
                 app:trackThickness="4dp" />

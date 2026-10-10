@@ -201,6 +201,50 @@ class NavigationViewModelTest {
         time = 15000; good(c)
         assertEquals(2, pending.size)
     }
+    @Test fun `reroute drives the candidate that continues the direction of travel`() {
+        good(); vm.start(b); dispatcher.scheduler.runCurrent()
+        pending[0].complete(route()); dispatcher.scheduler.runCurrent()
+        go()
+        offerAlternatives = true
+        // Driving east at c, away from the planned line.
+        for (t in listOf(11000L, 12000L, 13000L, 14000L)) {
+            time = t; vm.updatePosition(GpsFix(c, 5.0, time, bearingDegrees = 90.0, speedMetersPerSecond = 15.0)); dispatcher.scheduler.runCurrent()
+        }
+        val back = Route(listOf(c, GeoPoint(56.31, 44.00), b), b, 2000.0, 200.0)
+        val forward = Route(listOf(c, GeoPoint(56.31, 44.02), b), b, 2600.0, 260.0)
+        pending[1].complete(back); dispatcher.scheduler.runCurrent()
+        assertSame("the main route is driven while candidates load", back, vm.state.value.route)
+        pending[2].complete(forward); dispatcher.scheduler.runCurrent()
+        pending[3].complete(back.copy(distanceMeters = 2001.0)); dispatcher.scheduler.runCurrent()
+        assertEquals(listOf(0, 0, 1, 2), alternatives)
+        assertEquals(NavigationPhase.ACTIVE, vm.state.value.phase)
+        assertSame(forward, vm.state.value.route)
+    }
+    @Test fun `reroute without a course keeps the main route and requests no candidates`() {
+        good(); vm.start(b); dispatcher.scheduler.runCurrent()
+        pending[0].complete(route()); dispatcher.scheduler.runCurrent()
+        go()
+        offerAlternatives = true
+        for (t in listOf(11000L, 12000L, 13000L, 14000L)) { time = t; good(c) }
+        val back = Route(listOf(c, GeoPoint(56.31, 44.00), b), b, 2000.0, 200.0)
+        pending[1].complete(back); dispatcher.scheduler.runCurrent()
+        assertSame(back, vm.state.value.route)
+        assertEquals(2, pending.size)
+    }
+    @Test fun `position arrow eases onto the route inside the corridor and is raw outside`() {
+        good(); vm.start(b); dispatcher.scheduler.runCurrent()
+        pending[0].complete(route()); dispatcher.scheduler.runCurrent()
+        go()
+        assertNull(vm.state.value.snappedPosition)
+        val onLine = interpolate(a, b, 0.5)
+        val beside = GeoPoint(onLine.latitude + 0.0001, onLine.longitude) // about 11 m off the line
+        val snaps = (1..3).map { time += 1000; good(beside); vm.state.value.snappedPosition!! }
+        val distances = snaps.map { distanceMeters(beside, it) }
+        assertTrue("blends towards the line: $distances", distances[0] > 0 && distances[0] < distances[1] && distances[1] < distances[2])
+        assertEquals(bearingDegrees(a, b), bearingDegrees(a, snaps[2]), 0.1)
+        time += 1000; good(c)
+        assertNull(vm.state.value.snappedPosition)
+    }
     @Test fun `distinct alternatives are offered and Go drives the selected one without recalculation`() {
         offerAlternatives = true
         good(); vm.start(c); dispatcher.scheduler.runCurrent()

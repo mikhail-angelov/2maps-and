@@ -20,12 +20,21 @@ Road data and map tiles are separate: `.rd5` files calculate routes, while
 `.mbtiles` files draw the map. Once imported, both work offline. GPS improves
 progress and rerouting, but an already known position is enough to plan a route.
 
-During navigation, the top card shows the next maneuver and distance to it.
-A road sign shows the numeric speed limit when present in the road data.
-The bottom panel uses one line for remaining time/distance, with estimated
-arrival when space permits, a thin progress bar, and **×** on the right to stop.
-The camera follows ahead of the position; dragging the map pauses following
-until the center button is pressed. Outside guidance, the position is a blue dot.
+<p>
+<img src="docs/navigation/screenshots/navigation-selecting.jpg" width="240" alt="Route choice with alternatives" />
+<img src="docs/navigation/screenshots/navigation-driving.jpg" width="240" alt="Guidance on route" />
+<img src="docs/navigation/screenshots/navigation-before-turn.jpg" width="240" alt="Guidance before a turn" />
+</p>
+
+During navigation, a compact blue card in the top-left corner shows the next
+maneuver and the distance to it. The top-right corner shows the current speed
+and, when present in the road data, the posted limit; the speed turns red above
+the limit, and limit signs are drawn on the map where the limit changes.
+The bottom bar shows remaining distance, arrival time and remaining time over a
+progress bar with a position cursor, and **×** on the right to stop. While on
+the route, the position arrow is snapped to the road. The map menu and locate
+button are hidden; dragging the map pauses following until the bottom bar is
+tapped. Outside guidance, the position is a blue dot.
 Yandex Navigator and OsmAnd handoff remain available.
 
 Time estimates do not include traffic. Voice instructions, lane guidance and
@@ -75,7 +84,7 @@ substantially. See [navigation setup](docs/navigation/README.md) and
 - **Embedded BRouter:** Car routes are calculated offline in a separate app process.
 - **Route alternatives:** Up to three distinct routes before starting, depending on the road network.
 - **Visual guidance:** Next maneuver, distance, known speed limits, remaining time/distance and route progress.
-- **Automatic rerouting:** Confirmed deviations trigger recalculation when a fresh, accurate GPS position is available.
+- **Automatic rerouting:** Confirmed deviations trigger recalculation when a fresh, accurate GPS position is available; a route that continues the direction of travel is preferred over a U-turn.
 - **Route visualization:** The traveled part is muted; the remaining route is highlighted.
 
 </td>

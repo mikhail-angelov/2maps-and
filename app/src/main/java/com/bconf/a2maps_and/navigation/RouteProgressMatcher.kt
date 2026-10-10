@@ -5,12 +5,14 @@ import kotlin.math.*
 data class RouteMatch(val crossTrackMeters: Double, val alongMeters: Double, val totalMeters: Double)
 
 class RouteProgressMatcher(private val route: Route) {
-    private val cumulative = DoubleArray(route.points.size)
+    private val cumulative = cumulativeMeters(route.points)
     private var lastSegment = 0
     private var progress = 0.0
     private var hasMatch = false
-    init { for (i in 1 until cumulative.size) cumulative[i] = cumulative[i - 1] + distanceMeters(route.points[i - 1], route.points[i]) }
     val totalMeters get() = cumulative.last()
+
+    /** The point on the route geometry [alongMeters] from its start. */
+    fun pointAt(alongMeters: Double) = pointAlong(route.points, cumulative, alongMeters)
 
     fun match(fix: GpsFix): RouteMatch {
         val nearOrigin = distanceMeters(route.points.first(), fix.point) < 100
@@ -30,10 +32,10 @@ class RouteProgressMatcher(private val route: Route) {
                 val along = cumulative[i] + fraction * (cumulative[i + 1] - cumulative[i])
                 val reversePenalty = if (hasMatch) ((progress - along - 35).coerceAtLeast(0.0) * 0.15).coerceAtMost(60.0) else 0.0
                 val jumpPenalty = if (hasMatch) ((along - progress - 300).coerceAtLeast(0.0) * 0.05).coerceAtMost(80.0) else 0.0
-                val headingPenalty = if (fix.speedMetersPerSecond.isFinite() && fix.speedMetersPerSecond > 3 && fix.bearingDegrees?.isFinite() == true) {
+                val headingPenalty = fix.courseDegrees?.let { course ->
                     val heading = Math.toDegrees(atan2(dx, dy))
-                    abs(longitudeDelta(heading - fix.bearingDegrees)) / 180 * 35
-                } else 0.0
+                    abs(longitudeDelta(heading - course)) / 180 * 35
+                } ?: 0.0
                 val initialPenalty = if (!hasMatch && nearOrigin && along > 300) 80.0 else 0.0
                 val score = cross + reversePenalty + jumpPenalty + headingPenalty + initialPenalty
                 if (score < bestScore) { bestScore = score; bestIndex = i; best = RouteMatch(cross, along, totalMeters) }
@@ -63,6 +65,39 @@ class ReroutePolicy {
         if (count == 0) firstAt = fix.elapsedMillis
         count++
         return count >= 3 && fix.elapsedMillis - firstAt >= 3000 && !busy && (lastStart == null || now - lastStart!! >= 10000)
+    }
+}
+
+/** Chooses among reroute candidates the one that continues the current direction of travel. */
+object RerouteSelector {
+    private const val LOOKAHEAD_METERS = 150.0
+    private const val REVERSAL_DEGREES = 150.0
+    private const val REVERSAL_PENALTY = 180.0
+    /** A candidate must beat the main route by this much, so equal-looking routes keep index 0. */
+    private const val CLEAR_MARGIN = 45.0
+
+    /** False when no candidate could be clearly better than [main], so extra candidates are not worth requesting. */
+    fun canImprove(main: Route, course: Double?) = course != null && score(main, course) > CLEAR_MARGIN
+
+    /** Index into [candidates] to drive; 0 unless another one clearly continues [course] better. */
+    fun select(candidates: List<Route>, course: Double?): Int {
+        if (course == null || candidates.size < 2) return 0
+        val scores = candidates.map { score(it, course) }
+        val best = scores.indices.minBy { scores[it] }
+        return if (scores[best] + CLEAR_MARGIN < scores[0]) best else 0
+    }
+
+    /**
+     * Angle between [course] and the route's heading over its first [LOOKAHEAD_METERS],
+     * so a single noisy vertex cannot decide, plus a penalty for an immediate reversal.
+     */
+    fun score(route: Route, course: Double): Double {
+        val cumulative = cumulativeMeters(route.points)
+        if (cumulative.last() <= 0) return 0.0
+        val ahead = pointAlong(route.points, cumulative, LOOKAHEAD_METERS)
+        val deviation = abs(longitudeDelta(bearingDegrees(route.points.first(), ahead) - course))
+        val uTurn = route.maneuvers.any { it.type == ManeuverType.U_TURN && cumulative[it.pointIndex] <= LOOKAHEAD_METERS }
+        return deviation + if (uTurn || deviation >= REVERSAL_DEGREES) REVERSAL_PENALTY else 0.0
     }
 }
 

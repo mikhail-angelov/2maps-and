@@ -15,6 +15,41 @@ fun distanceMeters(a: GeoPoint, b: GeoPoint): Double {
     return 6371000.0 * 2 * asin(sqrt(h.coerceIn(0.0, 1.0)))
 }
 
+/** Initial great-circle bearing from [a] to [b], 0..360 clockwise from north. */
+fun bearingDegrees(a: GeoPoint, b: GeoPoint): Double {
+    val lat1 = Math.toRadians(a.latitude); val lat2 = Math.toRadians(b.latitude)
+    val lon = Math.toRadians(longitudeDelta(b.longitude - a.longitude))
+    val y = sin(lon) * cos(lat2)
+    val x = cos(lat1) * sin(lat2) - sin(lat1) * cos(lat2) * cos(lon)
+    return (Math.toDegrees(atan2(y, x)) + 360) % 360
+}
+
+/** Distance from the first point to every vertex. */
+fun cumulativeMeters(points: List<GeoPoint>): DoubleArray {
+    val cumulative = DoubleArray(points.size)
+    for (i in 1 until points.size) cumulative[i] = cumulative[i - 1] + distanceMeters(points[i - 1], points[i])
+    return cumulative
+}
+
+/** Segment index and the fraction within it at [along] metres of a [cumulativeMeters] array. */
+fun segmentAt(cumulative: DoubleArray, along: Double): Pair<Int, Double> {
+    if (cumulative.size < 2) return 0 to 0.0
+    val target = along.coerceIn(0.0, cumulative.last())
+    val index = cumulative.binarySearch(target).let { if (it >= 0) it else -it - 2 }.coerceIn(0, cumulative.size - 2)
+    val length = cumulative[index + 1] - cumulative[index]
+    return index to if (length > 0) (target - cumulative[index]) / length else 0.0
+}
+
+/** Point [along] metres from the start of [points]; [cumulative] is their [cumulativeMeters]. */
+fun pointAlong(points: List<GeoPoint>, cumulative: DoubleArray, along: Double): GeoPoint {
+    if (points.size < 2) return points.first()
+    val (index, t) = segmentAt(cumulative, along)
+    return interpolate(points[index], points[index + 1], t)
+}
+
+fun interpolate(a: GeoPoint, b: GeoPoint, t: Double) =
+    GeoPoint(a.latitude + (b.latitude - a.latitude) * t, a.longitude + longitudeDelta(b.longitude - a.longitude) * t)
+
 data class Route(val points: List<GeoPoint>, val destination: GeoPoint,
                  val distanceMeters: Double, val estimatedDurationSeconds: Double?,
                  val maneuvers: List<RouteManeuver> = emptyList(),
@@ -31,6 +66,9 @@ data class GpsFix(val point: GeoPoint, val accuracyMeters: Double, val elapsedMi
                   val bearingDegrees: Double? = null, val speedMetersPerSecond: Double = 0.0) {
     fun isGood(now: Long) = point.isValid() && elapsedMillis > 0 && now - elapsedMillis in 0..15000 &&
         accuracyMeters.isFinite() && accuracyMeters in 0.0..50.0
+
+    /** Direction of travel when GPS reports one while moving faster than walking pace, as for the position arrow. */
+    val courseDegrees get() = bearingDegrees?.takeIf { it.isFinite() && speedMetersPerSecond.isFinite() && speedMetersPerSecond > 3 }
 }
 
 enum class RoutingFailure { UNAVAILABLE, SETUP, INVALID_RESPONSE, TOO_LARGE, CONNECTION, TIMEOUT }
@@ -57,6 +95,10 @@ data class NavigationState(
     val progressMeters: Double? = null,
     /** Wall-clock arrival estimate; frozen while the position is stale. */
     val arrivalAtMillis: Long? = null,
+    /** Current GPS speed while guiding; null when unknown. */
+    val speedKmh: Int? = null,
+    /** Where to draw the car while guiding on the route; null means the raw GPS position. */
+    val snappedPosition: GeoPoint? = null,
 ) {
     /** GPS was lost after the route progress had been confirmed. */
     val positionStale get() = waitingForGps && progressMeters != null

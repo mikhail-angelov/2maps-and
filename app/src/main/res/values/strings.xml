@@ -37,9 +37,6 @@
     <string name="navigation_go">Go</string>
     <string name="navigation_minutes">%1$d min</string>
     <string name="navigation_hours_minutes">%1$d h %2$02d min</string>
-    <string name="navigation_summary">%1$s · %2$s</string>
-    <string name="navigation_arrival">Arrival ≈ %1$s</string>
-    <string name="navigation_arrival_short">≈ %1$s</string>
     <string name="navigation_preview">Route preview</string>
     <string name="navigation_position_stale">Position is not updating</string>
     <string name="navigation_searching_alternatives">Looking for alternatives…</string>
@@ -47,5 +44,6 @@
     <string name="navigation_option_main">Main route</string>
     <string name="navigation_option_description">Route option %1$d: %2$s</string>
     <string name="navigation_speed_limit_description">Speed limit %1$d km/h</string>
+    <string name="navigation_speed_description">Current speed %1$d km/h</string>
     <string name="navigation_maneuver_description">%1$s in %2$s</string>
 </resources>

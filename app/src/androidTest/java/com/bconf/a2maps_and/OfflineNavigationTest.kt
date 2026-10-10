@@ -155,17 +155,19 @@ class OfflineNavigationTest {
                     location = ViewModelProvider(it)[LocationViewModel::class.java]
                     location.setLocationModeFromMenu(LocationMode.RECORD)
                     vm = ViewModelProvider(it)[NavigationViewModel::class.java]
-                    vm.start(target)
                 }
+                // The map menu is hidden while navigating, so the imported map is chosen first.
+                onView(withId(R.id.mainMenuButton)).perform(click())
+                onView(withText("integration-map")).perform(click())
+                SystemClock.sleep(1500)
+                scenario.onActivity { vm.start(target) }
                 mockPosition(origin)
                 waitForRoute(vm)
                 assertLayers(scenario)
                 onView(withId(R.id.navigationPanel)).check(matches(isDisplayed()))
                 onView(withId(R.id.navigationStop)).check(matches(isDisplayed()))
-                onView(withId(R.id.mainMenuButton)).perform(click())
-                onView(withText("integration-map")).perform(click())
-                SystemClock.sleep(1500)
-                assertLayers(scenario)
+                onView(withId(R.id.mainMenuButton)).check(matches(withEffectiveVisibility(Visibility.INVISIBLE)))
+                onView(withId(R.id.fabCenterOnLocationInFragment)).check(matches(withEffectiveVisibility(Visibility.GONE)))
                 scenario.recreate()
                 assertLayers(scenario)
                 assertEquals(NavigationPhase.ACTIVE, vm.state.value.phase)
