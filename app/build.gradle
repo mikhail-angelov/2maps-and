@@ -82,6 +82,9 @@ dependencies {
     // Scale bar plugin
     implementation 'org.maplibre.gl:android-plugin-scalebar-v9:3.0.2'
 
+    // QR scanner for trips; works without Google Play services (Huawei devices).
+    implementation 'com.journeyapps:zxing-android-embedded:4.3.0'
+
     // Coroutines
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3'
 

@@ -12,6 +12,8 @@ import androidx.core.view.doOnLayout
 import androidx.core.view.isInvisible
 import androidx.core.view.isVisible
 import com.bconf.a2maps_and.home.HomeLayerManager
+import com.bconf.a2maps_and.trip.TripLayerManager
+import com.bconf.a2maps_and.trip.TripStore
 import com.bconf.a2maps_and.home.HomeStore
 import com.bconf.a2maps_and.navigation.*
 import android.annotation.SuppressLint
@@ -109,6 +111,9 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
     private var fabCompass: FloatingActionButton? = null
     private var fabHome: FloatingActionButton? = null
     private val homeStore by lazy { HomeStore(requireContext()) }
+    private val tripStore by lazy { TripStore(requireContext()) }
+    private val tripLayerManager = TripLayerManager()
+    private var shownTripLeg: TripLeg? = null
     private var homeLayerManager: HomeLayerManager? = null
     private var trackStatsText: TextView? = null
     private var isRadialMenuOpen = false
@@ -238,6 +243,7 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
                         trackLayerManager.setupTrackLayer(style)
                         routeLayerManager.onStyleLoaded(style)
                         homeLayerManager?.onStyleLoaded(style)
+                        tripLayerManager.onStyleLoaded(style)
                         locationViewModel.lastKnownGpsLocation.value?.let { updateCurrentLocationIndicatorAndCamera(it) }
                     }
                 }
@@ -275,6 +281,10 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
                 closeRadialMenu()
             } else if (locationViewModel.locationMode.value != LocationMode.INACTIVE) {
                 locationViewModel.onCenterButtonClicked()
+            } else {
+                val location = locationViewModel.lastKnownGpsLocation.value
+                if (location == null) Toast.makeText(requireContext(), R.string.location_unknown, Toast.LENGTH_SHORT).show()
+                else updateCurrentLocationIndicatorAndCamera(location, true)
             }
         }
         fabCenterOnLocation?.setOnLongClickListener {
@@ -384,12 +394,14 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
             },
             onSelect = { navigationViewModel.select(it) },
             onGo = { navigationViewModel.go() },
-            onRecenter = { recenterOnCar() })
+            onRecenter = { recenterOnCar() },
+            onSkip = { navigationViewModel.skipTripPoint() })
         navigationPanel = panel
         launchWhenStarted {
             navigationViewModel.state.collect { state ->
                 panel.render(state, navigationViewModel.hasPrecisePermission())
                 routeLayerManager.render(state)
+                renderTrip(state.trip)
                 if (::mapsLayerManager.isInitialized) {
                     locationViewModel.lastKnownGpsLocation.value?.let { updateCurrentLocationMarker(it) }
                 }
@@ -406,6 +418,13 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
     }
 
     /** Resumes following the car after a map gesture; while navigating the bottom panel is the re-centre control. */
+    /** Reads the trip file only when the leg changes, which is also when a point gets visited. */
+    private fun renderTrip(leg: TripLeg?) {
+        if (leg == shownTripLeg) return
+        shownTripLeg = leg
+        tripLayerManager.show(leg?.let { tripStore.get(it.tripId)?.points }.orEmpty())
+    }
+
     private fun recenterOnCar() {
         if (!navigationViewModel.state.value.needsGps) return
         isUserPanning = false
@@ -592,6 +611,7 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
             trackLayerManager.setupTrackLayer(style)
             routeLayerManager.onStyleLoaded(style)
             homeLayerManager?.onStyleLoaded(style)
+            tripLayerManager.onStyleLoaded(style)
             focusInitialPlacemark()
         })
     }
@@ -924,6 +944,8 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         routeLayerManager.cleanup()
         homeLayerManager?.cleanup()
         homeLayerManager = null
+        tripLayerManager.cleanup()
+        shownTripLeg = null
         navigationPanel = null
         navigationLayoutActive = null
         scaleBar = null

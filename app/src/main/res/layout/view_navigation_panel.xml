@@ -129,6 +129,23 @@
             android:layout_height="wrap_content"
             android:orientation="vertical">
 
+            <!-- Trip progress: point number and name of the trip point being driven to. -->
+            <TextView
+                android:id="@+id/navigationTripInfo"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="-6dp"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:paddingStart="20dp"
+                android:paddingTop="12dp"
+                android:paddingEnd="20dp"
+                android:textColor="@color/nav_text_secondary"
+                android:textSize="15sp"
+                android:visibility="gone"
+                tools:text="2 / 5 · Поле у Кстово"
+                tools:visibility="visible" />
+
             <!-- One row like the reference: distance, arrival and time over the progress bar, then Stop. -->
             <LinearLayout
                 android:layout_width="match_parent"
@@ -189,6 +206,18 @@
                         android:visibility="gone"
                         tools:visibility="visible" />
                 </LinearLayout>
+
+                <ImageButton
+                    android:id="@+id/navigationSkip"
+                    android:layout_width="52dp"
+                    android:layout_height="52dp"
+                    android:layout_marginEnd="8dp"
+                    android:background="@drawable/bg_navigation_stop"
+                    android:contentDescription="@string/trip_skip"
+                    android:src="@drawable/ic_skip_next"
+                    android:visibility="gone"
+                    app:tint="@color/nav_text"
+                    tools:visibility="visible" />
 
                 <ImageButton
                     android:id="@+id/navigationStop"

@@ -47,6 +47,8 @@ class LocationService : Service() {
     private val serviceScope = CoroutineScope(Dispatchers.Default + serviceJob)
 
     private lateinit var gpxLogger: GpxLogger
+    private lateinit var navigationLogger: GpxLogger
+    private var navigationRecording = false
     private var isStopped = false
     private var navigationActive = false
     private var updatesStarted = false
@@ -62,6 +64,9 @@ class LocationService : Service() {
     companion object {
         const val ACTION_SET_NAVIGATION_ACTIVE = "com.bconf.a2maps_and.action.SET_NAVIGATION_ACTIVE"
         const val EXTRA_NAVIGATION_ACTIVE = "navigation_active"
+        /** Every guided drive is written to its own GPX file, independent of the manual recording mode. */
+        const val ACTION_SET_NAVIGATION_RECORDING = "com.bconf.a2maps_and.action.SET_NAVIGATION_RECORDING"
+        const val EXTRA_NAVIGATION_RECORDING = "navigation_recording"
         const val ACTION_SET_LOCATION_MODE =
             "com.bconf.a2maps_and.action.SET_LOCATION_MODE"
         const val ACTION_START_LOCATION_SERVICE = "ACTION_START_LOCATION_SERVICE"
@@ -107,6 +112,7 @@ class LocationService : Service() {
         huaweiFusedLocationClient =
             com.huawei.hms.location.LocationServices.getFusedLocationProviderClient(this)
         gpxLogger = GpxLogger(this)
+        navigationLogger = GpxLogger(this, "navigation")
         createNotificationChannel()
         setupLocationCallbacks()
 
@@ -288,6 +294,14 @@ class LocationService : Service() {
                 }
             }
 
+            ACTION_SET_NAVIGATION_RECORDING -> {
+                val recording = intent.getBooleanExtra(EXTRA_NAVIGATION_RECORDING, false)
+                if (navigationRecording != recording) {
+                    navigationRecording = recording
+                    if (recording) navigationLogger.startGpxLogging() else navigationLogger.stopGpxLogging()
+                }
+            }
+
             ACTION_SET_LOCATION_MODE -> {
                 val modeName = intent.getStringExtra(EXTRA_LOCATION_MODE)
                 val newMode = modeName?.let { LocationMode.valueOf(it) }
@@ -349,6 +363,7 @@ class LocationService : Service() {
             gpxLogger.appendGpxTrackPoint(location)
             _recordedPath.value = _recordedPath.value + LatLng(location.latitude, location.longitude)
         }
+        if (navigationRecording) navigationLogger.appendGpxTrackPoint(location)
         _lastLocation.value = location
         saveLastLocation(location)
     }
@@ -392,6 +407,7 @@ class LocationService : Service() {
         isStopped = true
         Log.i("LocationService", "stopService called. Cleaning up...")
         gpxLogger.stopGpxLogging()
+        navigationLogger.stopGpxLogging()
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopLocationUpdates()
         serviceJob.cancel()

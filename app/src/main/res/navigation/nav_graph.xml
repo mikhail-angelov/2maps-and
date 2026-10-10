@@ -43,6 +43,8 @@
             app:destination="@id/mapsFragment"
             app:popUpTo="@id/mainMenuFragment"
             app:popUpToInclusive="true" />
+        <action android:id="@+id/action_mainMenuFragment_to_tripsFragment"
+            app:destination="@id/tripsFragment" app:popUpTo="@id/mainMenuFragment" app:popUpToInclusive="true" />
         <action android:id="@+id/action_mainMenuFragment_to_roadDataFragment"
             app:destination="@id/roadDataFragment" app:popUpTo="@id/mainMenuFragment" app:popUpToInclusive="true" />
     </fragment>
@@ -77,4 +79,6 @@
     </fragment>
     <fragment android:id="@+id/roadDataFragment" android:name="com.bconf.a2maps_and.navigation.RoadDataFragment"
         android:label="@string/road_data_title" tools:layout="@layout/fragment_road_data" />
+    <fragment android:id="@+id/tripsFragment" android:name="com.bconf.a2maps_and.trip.TripsFragment"
+        android:label="@string/trips_title" tools:layout="@layout/fragment_trips" />
 </navigation>

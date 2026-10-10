@@ -4,6 +4,9 @@ import android.Manifest
 import androidx.lifecycle.ViewModelStore
 import kotlinx.coroutines.*
 import kotlinx.coroutines.test.*
+import com.bconf.a2maps_and.trip.Trip
+import com.bconf.a2maps_and.trip.TripPoint
+import com.bconf.a2maps_and.trip.TripStore
 import org.junit.*
 import org.junit.Assert.*
 import org.junit.runner.RunWith
@@ -267,6 +270,48 @@ class NavigationViewModelTest {
         assertEquals(NavigationPhase.ACTIVE, vm.state.value.phase)
         assertSame(other, vm.state.value.route)
         assertEquals(3, pending.size)
+    }
+    @Test fun `each guided drive starts and finishes its own track recording`() {
+        val shadow = shadowOf(RuntimeEnvironment.getApplication())
+        fun recording(): List<Boolean> = generateSequence { shadow.nextStartedService }
+            .filter { it.action == LocationService.ACTION_SET_NAVIGATION_RECORDING }
+            .map { it.getBooleanExtra(LocationService.EXTRA_NAVIGATION_RECORDING, false) }.toList()
+        recording()
+        good(); vm.start(b); dispatcher.scheduler.runCurrent()
+        pending[0].complete(route()); dispatcher.scheduler.runCurrent()
+        assertEquals(emptyList<Boolean>(), recording())
+        go()
+        assertEquals(listOf(true), recording())
+        vm.stop(); dispatcher.scheduler.runCurrent()
+        assertEquals(listOf(false), recording())
+    }
+    @Test fun `trip drives the nearest point, then continues to the next without asking`() {
+        val store = TripStore(RuntimeEnvironment.getApplication())
+        store.add(Trip("t", "Fields", 1, listOf(TripPoint(c.latitude, c.longitude, "far"), TripPoint(b.latitude, b.longitude, "near"))))
+        good(a)
+        assertTrue(vm.startTrip("t")); dispatcher.scheduler.runCurrent()
+        assertEquals(b, targets.last())
+        assertEquals(TripLeg("t", "Fields", 1, "near", 1, 2, continuing = false), vm.state.value.trip)
+        pending[0].complete(route()); dispatcher.scheduler.runCurrent()
+        assertEquals(NavigationPhase.SELECTING, vm.state.value.phase)
+        go()
+        repeat(3) { time += 1000; good(b) }
+        assertEquals(c, targets.last())
+        assertEquals(2, vm.state.value.trip?.number)
+        assertEquals(1, store.get("t")?.visitedCount)
+        pending[1].complete(Route(listOf(b, c), c, 1500.0, 120.0)); dispatcher.scheduler.runCurrent()
+        assertEquals(NavigationPhase.ACTIVE, vm.state.value.phase)
+        assertTrue(vm.state.value.recordsTrack)
+        repeat(3) { time += 1000; good(c) }
+        assertEquals(NavigationPhase.ARRIVED, vm.state.value.phase)
+        assertEquals(2, store.get("t")?.visitedCount)
+        // A finished trip starts over on the next start.
+        assertTrue(vm.startTrip("t")); dispatcher.scheduler.runCurrent()
+        assertEquals(0, store.get("t")?.visitedCount)
+        vm.skipTripPoint(); dispatcher.scheduler.runCurrent()
+        assertEquals(2, vm.state.value.trip?.number)
+        vm.skipTripPoint(); dispatcher.scheduler.runCurrent()
+        assertEquals(NavigationPhase.IDLE, vm.state.value.phase)
     }
     @Test fun `Go stops the alternative search and a new destination ignores late alternatives`() {
         offerAlternatives = true

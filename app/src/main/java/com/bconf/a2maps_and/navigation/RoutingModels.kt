@@ -74,6 +74,10 @@ data class GpsFix(val point: GeoPoint, val accuracyMeters: Double, val elapsedMi
 enum class RoutingFailure { UNAVAILABLE, SETUP, INVALID_RESPONSE, TOO_LARGE, CONNECTION, TIMEOUT }
 class RoutingException(val kind: RoutingFailure, message: String) : Exception(message)
 
+/** One leg of a trip: [number] of [total] points, counting the ones already reached or skipped. */
+data class TripLeg(val tripId: String, val tripName: String, val pointIndex: Int, val pointName: String,
+                   val number: Int, val total: Int, val continuing: Boolean)
+
 enum class NavigationPhase { IDLE, WAITING_POSITION, CALCULATING, SELECTING, ACTIVE, ERROR, ARRIVED }
 data class NavigationState(
     val phase: NavigationPhase = NavigationPhase.IDLE,
@@ -99,9 +103,15 @@ data class NavigationState(
     val speedKmh: Int? = null,
     /** Where to draw the car while guiding on the route; null means the raw GPS position. */
     val snappedPosition: GeoPoint? = null,
+    /** The trip point being driven to, when navigating a trip. */
+    val trip: TripLeg? = null,
 ) {
     /** GPS was lost after the route progress had been confirmed. */
     val positionStale get() = waitingForGps && progressMeters != null
+    /** Guidance has begun and not ended; this period is recorded as a GPX track. */
+    val recordsTrack get() = phase == NavigationPhase.ACTIVE || (phase == NavigationPhase.ERROR && progressMeters != null) ||
+        // A trip is one track: recording continues while the next leg is calculated.
+        (trip?.continuing == true && phase != NavigationPhase.IDLE && phase != NavigationPhase.ARRIVED)
     val needsGps get() = phase == NavigationPhase.WAITING_POSITION || phase == NavigationPhase.CALCULATING || phase == NavigationPhase.ACTIVE || (phase == NavigationPhase.ERROR && route != null)
 }
 

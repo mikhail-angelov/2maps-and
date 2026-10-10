@@ -71,7 +71,7 @@ class MapFragmentRobolectricTest {
             val root = fragment.requireView()
             var selected = -1
             var recentered = 0
-            val panel = NavigationPanel(root, {}, {}, {}, { selected = it }, {}, { recentered++ })
+            val panel = NavigationPanel(root, {}, {}, {}, { selected = it }, {}, { recentered++ }, {})
             val a = GeoPoint(56.29, 43.98); val b = GeoPoint(56.30, 44.00)
             val main = Route(listOf(a, b), b, 8400.0, 720.0)
             val other = Route(listOf(a, GeoPoint(56.29, 44.0), b), b, 9000.0, 900.0)

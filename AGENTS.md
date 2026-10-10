@@ -34,7 +34,7 @@
 ## Security And Privacy
 
 - Do not enable body-level HTTP logging for auth calls. Login/signup payloads include passwords and responses include tokens.
-- Backup rules intentionally exclude auth prefs, location prefs, the Home point (`home_prefs`), imported maps, GPX tracks, and local placemark/gas-station JSON.
+- Backup rules intentionally exclude auth prefs, location prefs, the Home point (`home_prefs`), trips (`trips.json`), imported maps, GPX tracks, and local placemark/gas-station JSON.
 - Keep `AuthRepository.init(this)` in `MainActivity` before auth state is used.
 
 ## Build And Verification

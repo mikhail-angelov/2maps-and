@@ -29,6 +29,7 @@ class NavigationPanel(
     private val onSelect: (Int) -> Unit,
     onGo: () -> Unit,
     onRecenter: () -> Unit,
+    onSkip: () -> Unit,
 ) {
     private val context = root.context
     val maneuverCard: View = root.findViewById(R.id.navigationManeuverCard)
@@ -47,6 +48,8 @@ class NavigationPanel(
     private val go: Button = root.findViewById(R.id.navigationGo)
     private val progress: LinearProgressIndicator = root.findViewById(R.id.navigationProgress)
     private val routeProgress: RouteProgressBar = root.findViewById(R.id.navigationRouteProgress)
+    private val tripInfo: TextView = root.findViewById(R.id.navigationTripInfo)
+    private val skip: View = root.findViewById(R.id.navigationSkip)
     private var renderedOptions: List<Route>? = null
 
     init {
@@ -55,6 +58,7 @@ class NavigationPanel(
         setup.setOnClickListener { onSetup() }
         go.setOnClickListener { onGo() }
         bottomCard.setOnClickListener { onRecenter() }
+        skip.setOnClickListener { onSkip() }
     }
 
     fun render(state: NavigationState, precisePermission: Boolean) {
@@ -65,7 +69,7 @@ class NavigationPanel(
 
         val arrival = state.arrivalAtMillis?.takeIf { phase == NavigationPhase.ACTIVE }?.let { DateFormat.getTimeFormat(context).format(Date(it)) }
         val summaryText = when {
-            phase == NavigationPhase.ARRIVED -> context.getString(R.string.navigation_arrived)
+            phase == NavigationPhase.ARRIVED -> context.getString(if (state.trip != null) R.string.trip_finished else R.string.navigation_arrived)
             phase == NavigationPhase.SELECTING || (state.route != null && (phase == NavigationPhase.ACTIVE || phase == NavigationPhase.ERROR)) ->
                 summary(state.remainingMeters, arrival, state.remainingSeconds)
             else -> null
@@ -88,6 +92,11 @@ class NavigationPanel(
         status.isVisible = statusText != null
         summary.isVisible = summaryText != null && statusText == null
         summary.text = summaryText
+
+        val leg = state.trip?.takeIf { phase != NavigationPhase.ARRIVED }
+        tripInfo.isVisible = leg != null
+        tripInfo.text = leg?.let { context.getString(R.string.trip_leg, it.number, it.total, it.pointName.ifBlank { it.tripName }) }
+        skip.isVisible = leg != null && leg.number < leg.total
 
         renderOptions(state)
         retry.isVisible = phase == NavigationPhase.ERROR

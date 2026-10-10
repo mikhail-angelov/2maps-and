@@ -43,6 +43,11 @@
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="location" />
+        <!-- The trip QR scanner follows the phone orientation instead of the library's landscape default. -->
+        <activity
+            android:name="com.journeyapps.barcodescanner.CaptureActivity"
+            android:screenOrientation="fullSensor"
+            tools:replace="screenOrientation" />
         <service android:name=".placemark.PlacemarkService" />
         <service android:name=".navigation.EmbeddedRoutingService"
             android:exported="false" android:process=":routing" />
