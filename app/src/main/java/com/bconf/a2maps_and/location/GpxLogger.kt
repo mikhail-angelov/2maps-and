@@ -11,7 +11,8 @@ import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
 
-class GpxLogger(private val context: Context) {
+/** Writes one GPX file per session; [prefix] tells manual recordings from navigation ones. */
+class GpxLogger(private val context: Context, private val prefix: String = "track") {
 
     private var gpxFileWriter: FileWriter? = null
     // Define the directory in a centralized way, matching TrackViewModel
@@ -36,7 +37,7 @@ class GpxLogger(private val context: Context) {
 
 
         val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
-        val fileName = "track_$timeStamp.gpx"
+        val fileName = "${prefix}_$timeStamp.gpx"
         // Create the file inside the internal 'gpx' directory
         val gpxFile = File(gpxDir, fileName)
 

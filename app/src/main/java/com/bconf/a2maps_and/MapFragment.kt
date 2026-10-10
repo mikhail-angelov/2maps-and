@@ -275,6 +275,10 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
                 closeRadialMenu()
             } else if (locationViewModel.locationMode.value != LocationMode.INACTIVE) {
                 locationViewModel.onCenterButtonClicked()
+            } else {
+                val location = locationViewModel.lastKnownGpsLocation.value
+                if (location == null) Toast.makeText(requireContext(), R.string.location_unknown, Toast.LENGTH_SHORT).show()
+                else updateCurrentLocationIndicatorAndCamera(location, true)
             }
         }
         fabCenterOnLocation?.setOnLongClickListener {

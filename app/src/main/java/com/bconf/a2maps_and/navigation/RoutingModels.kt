@@ -102,6 +102,8 @@ data class NavigationState(
 ) {
     /** GPS was lost after the route progress had been confirmed. */
     val positionStale get() = waitingForGps && progressMeters != null
+    /** Guidance has begun and not ended; this period is recorded as a GPX track. */
+    val recordsTrack get() = phase == NavigationPhase.ACTIVE || (phase == NavigationPhase.ERROR && progressMeters != null)
     val needsGps get() = phase == NavigationPhase.WAITING_POSITION || phase == NavigationPhase.CALCULATING || phase == NavigationPhase.ACTIVE || (phase == NavigationPhase.ERROR && route != null)
 }
 

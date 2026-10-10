@@ -268,6 +268,20 @@ class NavigationViewModelTest {
         assertSame(other, vm.state.value.route)
         assertEquals(3, pending.size)
     }
+    @Test fun `each guided drive starts and finishes its own track recording`() {
+        val shadow = shadowOf(RuntimeEnvironment.getApplication())
+        fun recording(): List<Boolean> = generateSequence { shadow.nextStartedService }
+            .filter { it.action == LocationService.ACTION_SET_NAVIGATION_RECORDING }
+            .map { it.getBooleanExtra(LocationService.EXTRA_NAVIGATION_RECORDING, false) }.toList()
+        recording()
+        good(); vm.start(b); dispatcher.scheduler.runCurrent()
+        pending[0].complete(route()); dispatcher.scheduler.runCurrent()
+        assertEquals(emptyList<Boolean>(), recording())
+        go()
+        assertEquals(listOf(true), recording())
+        vm.stop(); dispatcher.scheduler.runCurrent()
+        assertEquals(listOf(false), recording())
+    }
     @Test fun `Go stops the alternative search and a new destination ignores late alternatives`() {
         offerAlternatives = true
         good(); vm.start(b); dispatcher.scheduler.runCurrent()

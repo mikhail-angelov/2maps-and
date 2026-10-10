@@ -119,6 +119,8 @@ substantially. See [navigation setup](docs/navigation/README.md) and
 
 **GPS Tracking:**
 - **Record Your Path:** Records the user's GPS location history to create a track.
+- **Navigation Tracks:** Every guided drive is saved as its own GPX track (`navigation_<time>.gpx`) in the track list.
+- **Center on Location:** A tap on the locate button centres the map on the current position; a long press opens the follow/record menu.
 - **Track Visualization:** Displays the recorded track as a line on the map.
 - **Clear Track:** Provides an option to clear the currently recorded track from the map.
 

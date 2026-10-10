@@ -50,6 +50,14 @@ class NavigationViewModel(
             }
         }
         viewModelScope.launch {
+            state.map { it.recordsTrack }.distinctUntilChanged().drop(1).collect { recording ->
+                getApplication<Application>().startService(Intent(getApplication(), LocationService::class.java).apply {
+                    action = LocationService.ACTION_SET_NAVIGATION_RECORDING
+                    putExtra(LocationService.EXTRA_NAVIGATION_RECORDING, recording)
+                })
+            }
+        }
+        viewModelScope.launch {
             while (isActive) {
                 delay(1000)
                 if (_state.value.needsGps && !hasAccurateFix()) {
