@@ -47,6 +47,7 @@ class MapFragmentRobolectricTest {
             assertNotNull(root.findViewById(R.id.mapViewInFragment))
             assertNotNull(root.findViewById(R.id.mainMenuButton))
             assertNotNull(root.findViewById(R.id.fabCenterOnLocationInFragment))
+            assertNotNull(root.findViewById(R.id.fabHome))
             assertEquals(View.VISIBLE, root.findViewById<View>(R.id.fabCompass).visibility)
             assertEquals(View.VISIBLE, root.findViewById<View>(R.id.fabToggleGasLayer).visibility)
             assertEquals(View.GONE, root.findViewById<View>(R.id.fabHideTrack).visibility)

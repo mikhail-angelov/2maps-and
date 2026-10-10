@@ -15,6 +15,9 @@ locally, without a separate BRouter application or an online routing service.
    routes east of 45° longitude may also need `E45_N55.rd5`.
 4. Long press a destination or open a placemark and choose **Navigate to → Offline**.
    Choose the main route or an available alternative, then tap **Go**.
+5. To get home quickly, long press the map and choose **Set as Home** (one point,
+   shown as an orange house). The **Home** button in the bottom-left corner then
+   starts offline navigation home.
 
 Road data and map tiles are separate: `.rd5` files calculate routes, while
 `.mbtiles` files draw the map. Once imported, both work offline. GPS improves

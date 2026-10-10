@@ -44,6 +44,10 @@
     <string name="navigation_option_main">Main route</string>
     <string name="navigation_option_description">Route option %1$d: %2$s</string>
     <string name="navigation_speed_limit_description">Speed limit %1$d km/h</string>
+    <string name="home_navigate">Navigate home</string>
+    <string name="home_set">Set as Home</string>
+    <string name="home_saved">Home saved</string>
+    <string name="home_hint">Long-press the map and choose Set as Home</string>
     <string name="navigation_speed_description">Current speed %1$d km/h</string>
     <string name="navigation_maneuver_description">%1$s in %2$s</string>
 </resources>

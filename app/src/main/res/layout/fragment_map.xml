@@ -45,6 +45,22 @@
 
     <!-- Group: Bottom-aligned UI elements -->
 
+    <!-- Starts offline navigation to the Home point; half transparent until Home is set. -->
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fabHome"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:contentDescription="@string/home_navigate"
+        android:src="@drawable/ic_home"
+        app:backgroundTint="@android:color/white"
+        app:fabCustomSize="44dp"
+        app:maxImageSize="22dp"
+        app:layout_constraintBottom_toBottomOf="@+id/fabCenterOnLocationInFragment"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="@+id/fabCenterOnLocationInFragment"
+        app:tint="@color/home_marker" />
+
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/fabCenterOnLocationInFragment"
         android:layout_width="wrap_content"
@@ -134,7 +150,7 @@
         android:id="@+id/trackStatsText"
         android:layout_width="wrap_content"
         android:layout_height="40dp"
-        android:layout_marginStart="16dp"
+        android:layout_marginStart="12dp"
         android:layout_marginBottom="16dp"
         android:background="#CC000000"
         android:gravity="center"
@@ -146,7 +162,8 @@
         android:textStyle="bold"
         android:visibility="gone"
         app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintStart_toEndOf="@id/fabHome"
+        app:layout_goneMarginStart="16dp"
         tools:ignore="HardcodedText"
         tools:text="1.24 km | 12:34"
         tools:visibility="visible" />
