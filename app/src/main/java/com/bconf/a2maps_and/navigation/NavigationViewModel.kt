@@ -12,6 +12,7 @@ import androidx.lifecycle.viewModelScope
 import com.bconf.a2maps_and.location.LocationService
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
+import kotlin.math.roundToInt
 import kotlin.math.roundToLong
 
 class NavigationViewModel(
@@ -39,6 +40,7 @@ class NavigationViewModel(
     private val reroute = ReroutePolicy()
     private val arrival = ArrivalDetection()
     private var selectionOrigin: GeoPoint? = null
+    private var snapSteps = 0
 
     init {
         viewModelScope.launch { LocationService.lastLocation.collect { updateLocation(it) } }
@@ -51,10 +53,11 @@ class NavigationViewModel(
             while (isActive) {
                 delay(1000)
                 if (_state.value.needsGps && !hasAccurateFix()) {
-                    reroute.resetSamples(); arrival.reset()
+                    reroute.resetSamples(); arrival.reset(); snapSteps = 0
                     val current = _state.value
                     // A limit of the last confirmed road must not outlive the position it belongs to.
-                    _state.value = current.copy(waitingForGps = true, maxSpeedKmh = if (current.progressMeters != null) null else current.maxSpeedKmh)
+                    _state.value = current.copy(waitingForGps = true, maxSpeedKmh = if (current.progressMeters != null) null else current.maxSpeedKmh,
+                        snappedPosition = null, speedKmh = null)
                 }
                 val current = _state.value
                 if (current.phase == NavigationPhase.ACTIVE && !current.positionStale) {
@@ -139,19 +142,20 @@ class NavigationViewModel(
         val bearing = if (location.hasBearing() && (!location.hasBearingAccuracy() || location.bearingAccuracyDegrees <= 30)) location.bearing.toDouble() else null
         updatePosition(GpsFix(GeoPoint(location.latitude, location.longitude),
             if (location.hasAccuracy()) location.accuracy.toDouble() else Double.POSITIVE_INFINITY,
-            location.elapsedRealtimeNanos / 1_000_000, bearing, location.speed.toDouble()))
+            location.elapsedRealtimeNanos / 1_000_000, bearing, if (location.hasSpeed()) location.speed.toDouble() else Double.NaN))
     }
 
     fun updatePosition(fix: GpsFix) {
         lastReceivedFix = fix
         if (fix.point.isValid() && fix.point != GeoPoint(0.0, 0.0)) shownPosition = fix.point
         if (!hasPrecisePermission() || !fix.isGood(now())) {
-            reroute.resetSamples(); arrival.reset()
+            reroute.resetSamples(); arrival.reset(); snapSteps = 0
             val current = _state.value
             if (current.needsGps) {
                 // After confirmed progress the car's road is unknown; only a never-started preview may use the shown point.
-                _state.value = if (current.progressMeters != null) current.copy(waitingForGps = true, maxSpeedKmh = null)
-                    else previewDetails(fix).let { current.copy(waitingForGps = true, upcomingManeuver = it.upcomingManeuver, maxSpeedKmh = it.maxSpeedKmh) }
+                _state.value = if (current.progressMeters != null) current.copy(waitingForGps = true, maxSpeedKmh = null, snappedPosition = null, speedKmh = null)
+                    else previewDetails(fix).let { current.copy(waitingForGps = true, upcomingManeuver = it.upcomingManeuver,
+                        maxSpeedKmh = it.maxSpeedKmh, snappedPosition = null, speedKmh = null) }
             }
             if (requestPending) tryCalculate()
             return
@@ -164,17 +168,22 @@ class NavigationViewModel(
         lastSample = fix.elapsedMillis
         val match = matcher!!.match(fix)
         val details = detailsFor(match, fix.accuracyMeters)
+        val onRoute = match.crossTrackMeters <= corridor(fix.accuracyMeters)
         // Off-route samples keep the last confirmed progress instead of projecting onto a far segment.
-        val progress = if (match.crossTrackMeters <= corridor(fix.accuracyMeters)) match.alongMeters else current.progressMeters
+        val progress = if (onRoute) match.alongMeters else current.progressMeters
         val remaining = progress?.let { (match.totalMeters - it).coerceAtLeast(0.0) } ?: current.remainingMeters
         val seconds = current.route.estimatedDurationSeconds?.let { it * remaining / match.totalMeters }
+        val onLine = if (onRoute && current.phase == NavigationPhase.ACTIVE) matcher!!.pointAt(match.alongMeters) else null
         _state.value = current.copy(remainingMeters = remaining, remainingSeconds = seconds, progressMeters = progress,
             arrivalAtMillis = arrivalAt(seconds), waitingForGps = false,
-            upcomingManeuver = details.upcomingManeuver, maxSpeedKmh = details.maxSpeedKmh)
+            upcomingManeuver = details.upcomingManeuver, maxSpeedKmh = details.maxSpeedKmh,
+            snappedPosition = snapped(fix.point, onLine),
+            speedKmh = fix.speedMetersPerSecond.takeIf { it.isFinite() && it >= 0 }?.let { (it * 3.6).roundToInt() })
         if (arrival.update(fix, match, current.destination!!, now())) {
             generation++
             _state.value = _state.value.copy(phase = NavigationPhase.ARRIVED, isRerouting = false, message = null, failure = null,
-                remainingMeters = 0.0, remainingSeconds = 0.0, progressMeters = match.totalMeters, upcomingManeuver = null, maxSpeedKmh = null)
+                remainingMeters = 0.0, remainingSeconds = 0.0, progressMeters = match.totalMeters, upcomingManeuver = null, maxSpeedKmh = null,
+                snappedPosition = null, speedKmh = null)
         } else if (reroute.shouldReroute(fix, match, now(), busy)) {
             tryCalculate(force = true)
         }
@@ -192,6 +201,7 @@ class NavigationViewModel(
         val token = generation
         // Planning without a driven route offers choices; rerouting while driving replaces the route directly.
         val selecting = current.route == null
+        val course = latestFix?.courseDegrees
         busy = true
         requestPending = false
         reroute.started(now())
@@ -202,7 +212,20 @@ class NavigationViewModel(
                 val started = now()
                 val route = engine.route(origin, target, 0)
                 if (token != generation) return@launch
-                if (!selecting) { activate(route, target); return@launch }
+                if (!selecting) {
+                    // The main route is driven at once; extra candidates may only replace it when it turns the car back.
+                    activate(route, target)
+                    if (!RerouteSelector.canImprove(route, course)) return@launch
+                    val candidates = mutableListOf(route)
+                    withTimeoutOrNull((ALTERNATIVES_BUDGET_MS - (now() - started)).coerceAtLeast(1)) {
+                        for (index in 1..MAX_ALTERNATIVES) {
+                            candidates += try { engine.route(origin, target, index) } catch (e: CancellationException) { throw e } catch (_: Exception) { break }
+                        }
+                    }
+                    val best = RerouteSelector.select(candidates, course)
+                    if (best != 0 && token == generation && _state.value.phase == NavigationPhase.ACTIVE) activate(candidates[best], target)
+                    return@launch
+                }
                 selectionOrigin = origin
                 _state.value = NavigationState(NavigationPhase.SELECTING, target, route, route.distanceMeters,
                     route.estimatedDurationSeconds, waitingForGps = !hasAccurateFix(), options = listOf(route), searchingAlternatives = true)
@@ -238,12 +261,20 @@ class NavigationViewModel(
         matcher = RouteProgressMatcher(route)
         previewMatcher = RouteProgressMatcher(route)
         guidance = RouteGuidance(route)
+        snapSteps = 0
         val details = lastReceivedFix?.let { previewDetails(it) } ?: guidance!!.at(0.0)
         reroute.resetSamples(); arrival.reset()
         _state.value = NavigationState(NavigationPhase.ACTIVE, target, route, matcher!!.totalMeters,
             route.estimatedDurationSeconds, waitingForGps = !hasAccurateFix(),
             upcomingManeuver = details.upcomingManeuver, maxSpeedKmh = details.maxSpeedKmh,
             arrivalAtMillis = arrivalAt(route.estimatedDurationSeconds))
+    }
+
+    /** Eases the drawn position onto the route over a few fixes, so entering guidance does not jump across the road. */
+    private fun snapped(raw: GeoPoint, onLine: GeoPoint?): GeoPoint? {
+        if (onLine == null) { snapSteps = 0; return null }
+        snapSteps = (snapSteps + 1).coerceAtMost(SNAP_BLEND_FIXES)
+        return interpolate(raw, onLine, snapSteps.toDouble() / SNAP_BLEND_FIXES)
     }
 
     /** Rounded to whole minutes, the precision shown, so the clock does not emit a state every second. */
@@ -265,5 +296,6 @@ class NavigationViewModel(
         private const val MAX_ALTERNATIVES = 2
         private const val ALTERNATIVES_BUDGET_MS = 30_000L
         private const val RESELECT_DISTANCE_METERS = 300.0
+        private const val SNAP_BLEND_FIXES = 3
     }
 }

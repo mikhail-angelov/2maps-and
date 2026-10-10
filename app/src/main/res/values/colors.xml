@@ -9,4 +9,10 @@
     <color name="nav_track">#DADCE0</color>
     <color name="nav_option_stroke">#DADCE0</color>
     <color name="nav_speed_limit_border">#D93025</color>
+    <color name="nav_speed_ring">#3C4043</color>
+    <color name="nav_speeding">#D93025</color>
+    <color name="nav_button">#F1F3F4</color>
+    <color name="nav_on_accent">#FFFFFF</color>
+    <color name="nav_vehicle">#FFC107</color>
+    <color name="nav_vehicle_outline">#B06000</color>
 </resources>

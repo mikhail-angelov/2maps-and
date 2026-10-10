@@ -9,6 +9,7 @@ import androidx.appcompat.app.AlertDialog
 import androidx.core.net.toUri
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.view.doOnLayout
+import androidx.core.view.isInvisible
 import androidx.core.view.isVisible
 import com.bconf.a2maps_and.navigation.*
 import android.annotation.SuppressLint
@@ -124,6 +125,7 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
     private var renderedNavigationPhase = NavigationPhase.IDLE
     private var overviewOptionCount = 0
     private var navigationLayoutActive: Boolean? = null
+    private var scaleBar: ScaleBarPlugin? = null
     private val idleLayoutParams = mutableMapOf<Int, ConstraintLayout.LayoutParams>()
 
     companion object {
@@ -262,8 +264,6 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
             headingPaused = false
             if (isRadialMenuOpen) {
                 closeRadialMenu()
-            } else if (navigationViewModel.state.value.needsGps) {
-                locationViewModel.lastKnownGpsLocation.value?.let { updateCurrentLocationIndicatorAndCamera(it, true) }
             } else if (locationViewModel.locationMode.value != LocationMode.INACTIVE) {
                 locationViewModel.onCenterButtonClicked()
             }
@@ -329,6 +329,8 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
 
     override fun onMapReady(mapLibreMap: MapLibreMap) {
         this.map = mapLibreMap
+        // The app's own compass button replaces MapLibre's, which would sit under the top-right controls.
+        map.uiSettings.isCompassEnabled = false
         setupScaleBar()
         setupMapListeners()
         setupLayerManagers()
@@ -361,7 +363,8 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
                 }
             },
             onSelect = { navigationViewModel.select(it) },
-            onGo = { navigationViewModel.go() })
+            onGo = { navigationViewModel.go() },
+            onRecenter = { recenterOnCar() })
         navigationPanel = panel
         launchWhenStarted {
             navigationViewModel.state.collect { state ->
@@ -374,6 +377,14 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
                 updateNavigationCamera(state)
             }
         }
+    }
+
+    /** Resumes following the car after a map gesture; while navigating the bottom panel is the re-centre control. */
+    private fun recenterOnCar() {
+        if (!navigationViewModel.state.value.needsGps) return
+        isUserPanning = false
+        headingPaused = false
+        locationViewModel.lastKnownGpsLocation.value?.let { updateCurrentLocationIndicatorAndCamera(it, true) }
     }
 
     /** Moves map buttons out of the cards' way while navigating and hides actions not needed for driving. */
@@ -395,20 +406,21 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
             marginEnd = (24 * density).toInt()
             topMargin = (12 * density).toInt()
         }
-        place(R.id.fabCenterOnLocationInFragment) {
-            bottomToBottom = ConstraintLayout.LayoutParams.UNSET
-            bottomToTop = R.id.navigationPanel
-        }
         place(R.id.trackStatsText) {
             bottomToBottom = ConstraintLayout.LayoutParams.UNSET
             bottomToTop = R.id.navigationPanel
         }
         if (active) closeRadialMenu()
+        // The scale bar would show under the maneuver card; guidance needs only the cards and the map.
+        scaleBar?.isEnabled = !active
         updateQuickActions()
     }
 
     private fun updateQuickActions() {
         val navigating = navigationViewModel.state.value.phase != NavigationPhase.IDLE
+        // Browsing chrome competes with the guidance cards; invisible keeps the compass anchored below the menu.
+        mainMenuButton?.isInvisible = navigating
+        fabCenterOnLocation?.isVisible = !navigating
         fabToggleGasLayer?.isVisible = !navigating && !isRadialMenuOpen
         fabHideTrack?.isVisible = !navigating && trackViewModel.trackPoints.value.isNotEmpty() &&
             !locationViewModel.locationMode.value.isRecording()
@@ -480,6 +492,8 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
             .setShowTextBorder(true)
             .setMetricUnit(true)
         scaleBarPlugin.create(scaleBarOptions)
+        scaleBar = scaleBarPlugin
+        scaleBarPlugin.isEnabled = navigationLayoutActive != true
     }
 
     private val realMapView: MapView
@@ -649,13 +663,15 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         val state = locationViewModel.locationMode.value
         val navigation = navigationViewModel.state.value
         val driving = navigation.needsGps
-        // While navigating, a gesture pauses following until the re-centre button; there is no timer.
+        // While navigating, a gesture pauses following until the bottom panel is tapped; there is no timer.
         if (isUserPanning && navigation.phase == NavigationPhase.IDLE &&
             System.currentTimeMillis() - lastUserInteractionTime > USER_INTERACTION_TIMEOUT_MS) {
             isUserPanning = false
         }
-        val lat = if (location.latitude == 0.0) DEFAULT_LOCATION_LAT else location.latitude
-        val lng = if (location.longitude == 0.0) DEFAULT_LOCATION_LNG else location.longitude
+        // The camera follows the arrow, which sits on the route while guiding.
+        val shown = navigation.snappedPosition
+        val lat = shown?.latitude ?: if (location.latitude == 0.0) DEFAULT_LOCATION_LAT else location.latitude
+        val lng = shown?.longitude ?: if (location.longitude == 0.0) DEFAULT_LOCATION_LNG else location.longitude
         val currentLatLng = LatLng(lat, lng)
         if (force || !isLocationLoaded) {
             val zoom = when {
@@ -700,8 +716,9 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         val navigation = navigationViewModel.state.value
         val guiding = navigation.phase == NavigationPhase.ACTIVE ||
             (navigation.phase == NavigationPhase.ERROR && navigation.route != null)
+        val shown = navigation.snappedPosition
         mapsLayerManager.updateCurrentLocation(
-            Point.fromLngLat(location.longitude, location.latitude),
+            Point.fromLngLat(shown?.longitude ?: location.longitude, shown?.latitude ?: location.latitude),
             currentHeadingBearing.takeIf { guiding }
         )
     }
@@ -878,6 +895,7 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         routeLayerManager.cleanup()
         navigationPanel = null
         navigationLayoutActive = null
+        scaleBar = null
         idleLayoutParams.clear()
         renderedNavigationPhase = NavigationPhase.IDLE
         isLocationLoaded = false

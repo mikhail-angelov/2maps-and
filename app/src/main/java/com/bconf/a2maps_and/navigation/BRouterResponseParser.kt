@@ -80,8 +80,7 @@ object BRouterResponseParser {
         val distance = header.indexOf("Distance")
         if (lon < 0 || lat < 0 || tags < 0) return@runCatching emptyList()
         val indices = points.indices.groupBy { (points[it].longitude * 1e6).roundToInt() to (points[it].latitude * 1e6).roundToInt() }
-        val cumulative = DoubleArray(points.size)
-        for (i in 1 until points.size) cumulative[i] = cumulative[i - 1] + distanceMeters(points[i - 1], points[i])
+        val cumulative = cumulativeMeters(points)
         val sections = mutableListOf<RouteRoadSection>()
         var from = 0
         for (i in 1 until rows.size()) {

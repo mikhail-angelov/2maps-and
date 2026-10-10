@@ -1,10 +1,7 @@
 package com.bconf.a2maps_and.navigation
 
 class RouteGuidance(private val route: Route) {
-    private val cumulative = DoubleArray(route.points.size)
-    init {
-        for (i in 1 until cumulative.size) cumulative[i] = cumulative[i - 1] + distanceMeters(route.points[i - 1], route.points[i])
-    }
+    private val cumulative = cumulativeMeters(route.points)
 
     fun at(alongMeters: Double): RouteGuidanceInfo {
         val along = alongMeters.coerceIn(0.0, cumulative.last())

@@ -8,6 +8,7 @@ import android.widget.TextView
 import com.bconf.a2maps_and.navigation.*
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -68,7 +69,8 @@ class MapFragmentRobolectricTest {
         scenario.onFragment { fragment ->
             val root = fragment.requireView()
             var selected = -1
-            val panel = NavigationPanel(root, {}, {}, {}, { selected = it }, {})
+            var recentered = 0
+            val panel = NavigationPanel(root, {}, {}, {}, { selected = it }, {}, { recentered++ })
             val a = GeoPoint(56.29, 43.98); val b = GeoPoint(56.30, 44.00)
             val main = Route(listOf(a, b), b, 8400.0, 720.0)
             val other = Route(listOf(a, GeoPoint(56.29, 44.0), b), b, 9000.0, 900.0)
@@ -83,13 +85,28 @@ class MapFragmentRobolectricTest {
 
             val driving = NavigationState(NavigationPhase.ACTIVE, b, main, 350.0, 60.0,
                 upcomingManeuver = UpcomingManeuver(RouteManeuver(1, ManeuverType.RIGHT), 347.0), maxSpeedKmh = 60,
-                progressMeters = 8050.0, arrivalAtMillis = 0L)
+                progressMeters = 8050.0, arrivalAtMillis = 0L, speedKmh = 54)
+            panel.render(driving, true)
+            assertTrue(root.findViewById<TextView>(R.id.navigationSummary).text.toString().startsWith("350 m"))
+            assertEquals(View.VISIBLE, root.findViewById<View>(R.id.navigationRouteProgress).visibility)
+            val speed = root.findViewById<TextView>(R.id.navigationCurrentSpeed)
+            assertEquals("54", speed.text.toString())
+            assertEquals(fragment.requireContext().getColor(R.color.nav_text), speed.currentTextColor)
+            panel.render(driving.copy(speedKmh = 72), true)
+            assertEquals(fragment.requireContext().getColor(R.color.nav_speeding), speed.currentTextColor)
+            panel.render(driving.copy(maxSpeedKmh = null), true)
+            assertEquals(View.GONE, root.findViewById<View>(R.id.navigationSpeedLimit).visibility)
+            assertEquals(View.VISIBLE, speed.visibility)
             panel.render(driving, true)
             assertEquals(View.VISIBLE, root.findViewById<View>(R.id.navigationManeuverCard).visibility)
             assertEquals("350 m", root.findViewById<TextView>(R.id.navigationManeuverDistance).text.toString())
             assertEquals("60", root.findViewById<TextView>(R.id.navigationSpeedLimit).text.toString())
             assertEquals(View.GONE, root.findViewById<View>(R.id.navigationGo).visibility)
             assertEquals(View.VISIBLE, root.findViewById<View>(R.id.navigationStop).visibility)
+            root.findViewById<View>(R.id.navigationStop).performClick()
+            assertEquals("Stop is not a re-centre tap", 0, recentered)
+            panel.bottomCard.performClick()
+            assertEquals(1, recentered)
 
             panel.render(driving.copy(waitingForGps = true, maxSpeedKmh = null), true)
             assertEquals("Position is not updating", root.findViewById<TextView>(R.id.navigationStatus).text.toString())

@@ -25,11 +25,13 @@ class RouteLayerManager(private val label: (Route) -> String) {
     private var renderedRoute: Route? = null
     private var renderedOptions: List<Route>? = null
     private var renderedProgress: Double? = null
+    private var renderedSigns: Route? = null
     private var progressScale: ProgressScale? = null
 
     fun onStyleLoaded(style: Style) {
         this.style = style
-        renderedRoute = null; renderedOptions = null; renderedProgress = null
+        renderedRoute = null; renderedOptions = null; renderedProgress = null; renderedSigns = null
+        if (style.getSource(SIGNS) == null) style.addSource(GeoJsonSource(SIGNS))
         if (style.getSource(ROUTE) == null) style.addSource(GeoJsonSource(ROUTE, GeoJsonOptions().withLineMetrics(true)))
         if (style.getSource(ALTERNATIVES) == null) style.addSource(GeoJsonSource(ALTERNATIVES))
         if (style.getSource(LABELS) == null) style.addSource(GeoJsonSource(LABELS))
@@ -42,6 +44,12 @@ class RouteLayerManager(private val label: (Route) -> String) {
             lineWidth(6f), lineCap(Property.LINE_CAP_ROUND), lineJoin(Property.LINE_JOIN_ROUND), lineGradient(color(ACCENT.toColorInt()))))
         add(style, CircleLayer(DESTINATION, TARGET).withProperties(
             circleColor(ACCENT), circleRadius(9f), circleStrokeColor("#FFFFFF"), circleStrokeWidth(3f)))
+        // Speed-limit signs where the limit changes along the driven route, drawn as map signs like the reference.
+        add(style, CircleLayer(SIGN_CIRCLE, SIGNS).withProperties(
+            circleColor("#FFFFFF"), circleRadius(13f), circleStrokeColor(SPEED_SIGN_BORDER), circleStrokeWidth(3.5f)).apply { minZoom = SIGNS_MIN_ZOOM })
+        add(style, SymbolLayer(SIGN_TEXT, SIGNS).withProperties(
+            textField(get("limit")), textFont(arrayOf("Noto Sans Bold")), textSize(12f), textColor(TEXT),
+            textAllowOverlap(true), textIgnorePlacement(true)).apply { minZoom = SIGNS_MIN_ZOOM })
         add(style, SymbolLayer(LABELS_LAYER, LABELS).withProperties(
             textField(get("label")), textFont(arrayOf("Noto Sans Bold")), textSize(13f),
             textColor(switchCase(get("selected"), color(ACCENT.toColorInt()), color(TEXT.toColorInt()))),
@@ -93,6 +101,11 @@ class RouteLayerManager(private val label: (Route) -> String) {
                 else step(lineProgress(), color(PASSED_COLOR.toColorInt()), stop(fraction.coerceAtMost(1.0), color(ACCENT.toColorInt())))))
             renderedProgress = progress
         }
+        val signed = state.route.takeIf { state.phase == NavigationPhase.ACTIVE }
+        if (signed !== renderedSigns || force) {
+            loaded.getSourceAs<GeoJsonSource>(SIGNS)?.setGeoJson(FeatureCollection.fromFeatures(signed?.let(::speedSigns).orEmpty()))
+            renderedSigns = signed
+        }
         val target = state.destination
         loaded.getSourceAs<GeoJsonSource>(TARGET)?.setGeoJson(FeatureCollection.fromFeatures(
             if (target == null) emptyArray() else arrayOf(Feature.fromGeometry(Point.fromLngLat(target.longitude, target.latitude)))))
@@ -104,7 +117,20 @@ class RouteLayerManager(private val label: (Route) -> String) {
         map.queryRenderedFeatures(RectF(screen.x - slopPx, screen.y - slopPx, screen.x + slopPx, screen.y + slopPx), LABELS_LAYER, ALTERNATIVES_LINE)
             .firstNotNullOfOrNull { it.getNumberProperty("option")?.toInt() }
 
-    fun cleanup() { style = null; renderedRoute = null; renderedOptions = null; renderedProgress = null }
+    fun cleanup() { style = null; renderedRoute = null; renderedOptions = null; renderedProgress = null; renderedSigns = null }
+
+    /** One sign at the start of every section whose known limit differs from the previous section's. */
+    private fun speedSigns(route: Route): List<Feature> {
+        var previous: Int? = null
+        return route.roadSections.mapNotNull { section ->
+            val limit = section.maxSpeedKmh
+            val changed = limit != null && limit != previous
+            previous = limit
+            if (!changed) return@mapNotNull null
+            val point = route.points.getOrNull(section.fromPointIndex) ?: return@mapNotNull null
+            Feature.fromGeometry(Point.fromLngLat(point.longitude, point.latitude)).apply { addStringProperty("limit", limit.toString()) }
+        }
+    }
 
     private fun line(route: Route) = LineString.fromLngLats(route.points.map { Point.fromLngLat(it.longitude, it.latitude) })
 
@@ -113,22 +139,18 @@ class RouteLayerManager(private val label: (Route) -> String) {
      * Using the same geometry as the matcher keeps the split exactly at the confirmed position.
      */
     private class ProgressScale(route: Route) {
-        private val meters = DoubleArray(route.points.size)
+        private val meters = cumulativeMeters(route.points)
         private val mercator = DoubleArray(route.points.size)
         init {
             for (i in 1 until route.points.size) {
                 val a = route.points[i - 1]; val b = route.points[i]
-                meters[i] = meters[i - 1] + distanceMeters(a, b)
                 mercator[i] = mercator[i - 1] + hypot(Math.toRadians(longitudeDelta(b.longitude - a.longitude)), y(b.latitude) - y(a.latitude))
             }
         }
 
         fun fraction(along: Double): Double? {
             if (mercator.last() <= 0) return null
-            val target = along.coerceIn(0.0, meters.last())
-            val index = meters.binarySearch(target).let { if (it >= 0) it else -it - 2 }.coerceIn(0, meters.size - 2)
-            val length = meters[index + 1] - meters[index]
-            val t = if (length > 0) (target - meters[index]) / length else 0.0
+            val (index, t) = segmentAt(meters, along)
             return (mercator[index] + t * (mercator[index + 1] - mercator[index])) / mercator.last()
         }
 
@@ -149,5 +171,10 @@ class RouteLayerManager(private val label: (Route) -> String) {
         private const val LINE = "navigation-line"
         private const val DESTINATION = "navigation-destination"
         private const val LABELS_LAYER = "navigation-labels-layer"
+        private const val SIGNS = "navigation-speed-signs"
+        private const val SIGN_CIRCLE = "navigation-speed-sign-circle"
+        private const val SIGN_TEXT = "navigation-speed-sign-text"
+        private const val SPEED_SIGN_BORDER = "#D93025"
+        private const val SIGNS_MIN_ZOOM = 13f
     }
 }

@@ -1,7 +1,10 @@
 package com.bconf.a2maps_and.navigation
 
 import android.content.res.ColorStateList
+import android.text.SpannableString
+import android.text.Spanned
 import android.text.format.DateFormat
+import android.text.style.RelativeSizeSpan
 import android.view.LayoutInflater
 import android.view.View
 import android.widget.Button
@@ -10,9 +13,6 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
-import androidx.core.view.doOnLayout
-import android.util.TypedValue
-import android.graphics.Paint
 import com.bconf.a2maps_and.R
 import com.google.android.material.card.MaterialCardView
 import com.google.android.material.progressindicator.LinearProgressIndicator
@@ -28,14 +28,16 @@ class NavigationPanel(
     onSetup: () -> Unit,
     private val onSelect: (Int) -> Unit,
     onGo: () -> Unit,
+    onRecenter: () -> Unit,
 ) {
     private val context = root.context
     val maneuverCard: View = root.findViewById(R.id.navigationManeuverCard)
     val bottomCard: View = root.findViewById(R.id.navigationPanel)
-    val speedLimit: TextView = root.findViewById(R.id.navigationSpeedLimit)
+    private val speedBlock: View = root.findViewById(R.id.navigationSpeedBlock)
+    private val currentSpeed: TextView = root.findViewById(R.id.navigationCurrentSpeed)
+    private val speedLimit: TextView = root.findViewById(R.id.navigationSpeedLimit)
     private val maneuverIcon: ImageView = root.findViewById(R.id.navigationManeuverIcon)
     private val maneuverDistance: TextView = root.findViewById(R.id.navigationManeuverDistance)
-    private val maneuverText: TextView = root.findViewById(R.id.navigationManeuver)
     private val summary: TextView = root.findViewById(R.id.navigationSummary)
     private val status: TextView = root.findViewById(R.id.navigationStatus)
     private val options: LinearLayout = root.findViewById(R.id.navigationOptions)
@@ -44,6 +46,7 @@ class NavigationPanel(
     private val setup: Button = root.findViewById(R.id.navigationSetup)
     private val go: Button = root.findViewById(R.id.navigationGo)
     private val progress: LinearProgressIndicator = root.findViewById(R.id.navigationProgress)
+    private val routeProgress: RouteProgressBar = root.findViewById(R.id.navigationRouteProgress)
     private var renderedOptions: List<Route>? = null
 
     init {
@@ -51,24 +54,20 @@ class NavigationPanel(
         retry.setOnClickListener { onRetry() }
         setup.setOnClickListener { onSetup() }
         go.setOnClickListener { onGo() }
+        bottomCard.setOnClickListener { onRecenter() }
     }
 
     fun render(state: NavigationState, precisePermission: Boolean) {
         val phase = state.phase
         bottomCard.isVisible = phase != NavigationPhase.IDLE
         renderManeuver(state)
-        val limit = state.maxSpeedKmh.takeIf { phase == NavigationPhase.ACTIVE }
-        speedLimit.isVisible = limit != null
-        if (limit != null) {
-            speedLimit.text = limit.toString()
-            speedLimit.contentDescription = context.getString(R.string.navigation_speed_limit_description, limit)
-        }
+        renderSpeed(state)
 
         val arrival = state.arrivalAtMillis?.takeIf { phase == NavigationPhase.ACTIVE }?.let { DateFormat.getTimeFormat(context).format(Date(it)) }
         val summaryText = when {
             phase == NavigationPhase.ARRIVED -> context.getString(R.string.navigation_arrived)
             phase == NavigationPhase.SELECTING || (state.route != null && (phase == NavigationPhase.ACTIVE || phase == NavigationPhase.ERROR)) ->
-                summary(state.remainingSeconds, state.remainingMeters)
+                summary(state.remainingMeters, arrival, state.remainingSeconds)
             else -> null
         }
         val statusText = when (phase) {
@@ -89,19 +88,6 @@ class NavigationPanel(
         status.isVisible = statusText != null
         summary.isVisible = summaryText != null && statusText == null
         summary.text = summaryText
-        if (summary.isVisible && arrival != null && summaryText != null) {
-            val withArrival = context.getString(R.string.navigation_summary, summaryText,
-                context.getString(R.string.navigation_arrival_short, arrival))
-            summary.doOnLayout {
-                val paint = Paint(summary.paint).apply {
-                    textSize = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 20f, context.resources.displayMetrics)
-                }
-                if (summary.isVisible && summary.text.toString() == summaryText &&
-                    paint.measureText(withArrival) <= summary.width - summary.paddingLeft - summary.paddingRight) {
-                    summary.text = withArrival
-                }
-            }
-        }
 
         renderOptions(state)
         retry.isVisible = phase == NavigationPhase.ERROR
@@ -130,8 +116,33 @@ class NavigationPanel(
             else context.getString(R.string.navigation_maneuver_meters, rounded)
     }
 
-    private fun summary(seconds: Double?, meters: Double) =
-        seconds?.let { context.getString(R.string.navigation_summary, durationText(it), distanceText(meters)) } ?: distanceText(meters)
+    /** Remaining distance, arrival time and remaining time, in the reference order; the bar's text autosizes to fit. */
+    private fun summary(meters: Double, arrival: String?, seconds: Double?) =
+        smallUnits(listOfNotNull(distanceText(meters), arrival, seconds?.let(::durationText)).joinToString(SUMMARY_SEPARATOR))
+
+    /** Numbers carry the information at a glance; unit words are set smaller, as in the reference. */
+    private fun smallUnits(text: String) = SpannableString(text).apply {
+        for (unit in UNIT_WORD.findAll(text)) setSpan(RelativeSizeSpan(UNIT_SCALE), unit.range.first, unit.range.last + 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+    }
+
+    private fun renderSpeed(state: NavigationState) {
+        val active = state.phase == NavigationPhase.ACTIVE
+        // An unknown limit hides its sign instead of showing a placeholder.
+        val limit = state.maxSpeedKmh.takeIf { active }
+        val speed = state.speedKmh.takeIf { active && !state.positionStale }
+        speedBlock.isVisible = limit != null || speed != null
+        speedLimit.isVisible = limit != null
+        if (limit != null) {
+            speedLimit.text = limit.toString()
+            speedLimit.contentDescription = context.getString(R.string.navigation_speed_limit_description, limit)
+        }
+        currentSpeed.isVisible = speed != null
+        if (speed != null) {
+            currentSpeed.text = speed.toString()
+            currentSpeed.contentDescription = context.getString(R.string.navigation_speed_description, speed)
+            currentSpeed.setTextColor(ContextCompat.getColor(context, if (limit != null && speed > limit) R.color.nav_speeding else R.color.nav_text))
+        }
+    }
 
     private fun renderManeuver(state: NavigationState) {
         val next = state.upcomingManeuver.takeIf { state.phase == NavigationPhase.ACTIVE }
@@ -152,8 +163,7 @@ class NavigationPanel(
         maneuverIcon.scaleX = if (type in RIGHT_TURNS) -1f else 1f
         val distance = distanceText(next.distanceMeters)
         val title = maneuverTitle(next.maneuver)
-        maneuverDistance.text = distance
-        maneuverText.text = title
+        maneuverDistance.text = smallUnits(distance)
         maneuverCard.contentDescription = context.getString(R.string.navigation_maneuver_description, title, distance)
         // Without a fresh position the instruction is kept for orientation but not presented as current.
         maneuverCard.alpha = if (state.positionStale) 0.5f else 1f
@@ -195,14 +205,14 @@ class NavigationPanel(
         val busy = state.phase == NavigationPhase.CALCULATING || (state.phase == NavigationPhase.SELECTING && state.searchingAlternatives) ||
             (state.phase == NavigationPhase.ACTIVE && state.isRerouting)
         val tracking = state.phase == NavigationPhase.ACTIVE || state.phase == NavigationPhase.ARRIVED
-        progress.isVisible = busy || tracking
-        if (progress.isIndeterminate != busy) progress.isIndeterminate = busy
-        if (!busy && tracking) {
+        progress.isVisible = busy
+        routeProgress.isVisible = tracking
+        if (tracking) {
             // Fraction of the same geometry the matcher measures; BRouter's own length estimate is not mixed in.
             val along = state.progressMeters ?: 0.0
             val total = along + state.remainingMeters
             val fraction = if (state.phase == NavigationPhase.ARRIVED) 1.0 else if (total > 0) along / total else 0.0
-            progress.setProgressCompat((fraction.coerceIn(0.0, 1.0) * progress.max).roundToInt(), false)
+            routeProgress.fraction = fraction.toFloat()
         }
     }
 
@@ -231,6 +241,9 @@ class NavigationPanel(
     }
 
     private companion object {
+        const val SUMMARY_SEPARATOR = "\u2003"
+        const val UNIT_SCALE = 0.65f
+        val UNIT_WORD = Regex("\\p{L}+")
         val RIGHT_TURNS = setOf(ManeuverType.RIGHT, ManeuverType.SLIGHT_RIGHT, ManeuverType.SHARP_RIGHT,
             ManeuverType.KEEP_RIGHT, ManeuverType.EXIT_RIGHT)
     }
