@@ -35,6 +35,7 @@ class MainMenuFragment : Fragment() {
         val menuItems = mutableListOf(
             MainMenuItem("Placemarks", actionId = R.id.action_mainMenuFragment_to_placemarksFragment),
             MainMenuItem("Tracks", actionId = R.id.action_mainMenuFragment_to_tracksFragment),
+            MainMenuItem(getString(R.string.trips_title), actionId = R.id.action_mainMenuFragment_to_tripsFragment),
             MainMenuItem("Maps", actionId = R.id.action_mainMenuFragment_to_mapsFragment),
             MainMenuItem(getString(R.string.road_data_title), actionId = R.id.action_mainMenuFragment_to_roadDataFragment)
         )

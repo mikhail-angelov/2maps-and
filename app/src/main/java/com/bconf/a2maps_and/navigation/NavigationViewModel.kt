@@ -10,6 +10,8 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.bconf.a2maps_and.location.LocationService
+import com.bconf.a2maps_and.trip.Trip
+import com.bconf.a2maps_and.trip.TripStore
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import kotlin.math.roundToInt
@@ -41,6 +43,9 @@ class NavigationViewModel(
     private val arrival = ArrivalDetection()
     private var selectionOrigin: GeoPoint? = null
     private var snapSteps = 0
+    private val trips = TripStore(application)
+    /** Trip points skipped during this drive; they stay unvisited in the saved trip. */
+    private val tripSkipped = mutableSetOf<Int>()
 
     init {
         viewModelScope.launch { LocationService.lastLocation.collect { updateLocation(it) } }
@@ -86,13 +91,42 @@ class NavigationViewModel(
     }
 
     fun start(destination: GeoPoint) {
+        tripSkipped.clear()
+        start(destination, null)
+    }
+
+    private fun start(destination: GeoPoint, trip: TripLeg?) {
         if (!destination.isValid()) return
         generation++
         requestPending = true
         matcher = null; previewMatcher = null; guidance = null; selectionOrigin = null; lastSample = 0; reroute.resetSamples(); arrival.reset()
-        _state.value = NavigationState(NavigationPhase.WAITING_POSITION, destination, waitingForGps = true)
+        _state.value = NavigationState(NavigationPhase.WAITING_POSITION, destination, waitingForGps = true, trip = trip)
         calculationJob?.cancel()
         tryCalculate()
+    }
+
+    /** Drives a saved trip nearest point first; a fully visited trip starts over. Returns false when it has no points. */
+    fun startTrip(id: String): Boolean {
+        var trip = trips.get(id)?.takeIf { it.points.isNotEmpty() } ?: return false
+        if (trip.visitedCount == trip.points.size) { trips.resetVisits(id); trip = trips.get(id) ?: return false }
+        tripSkipped.clear()
+        return startLeg(trip, shownPosition, continuing = false)
+    }
+
+    /** Leaves the current trip point for this drive and continues to the next nearest one. */
+    fun skipTripPoint() {
+        val leg = _state.value.trip ?: return
+        tripSkipped += leg.pointIndex
+        val trip = trips.get(leg.tripId)
+        if (trip == null || !startLeg(trip, shownPosition, continuing = true)) stop()
+    }
+
+    private fun startLeg(trip: Trip, from: GeoPoint?, continuing: Boolean): Boolean {
+        val index = trip.nearestIndex(from, tripSkipped) ?: return false
+        val point = trip.points[index]
+        val leg = TripLeg(trip.id, trip.name, index, point.name, trip.visitedCount + tripSkipped.size + 1, trip.points.size, continuing)
+        start(point.point, leg)
+        return true
     }
 
     fun retry() {
@@ -107,6 +141,7 @@ class NavigationViewModel(
     }
 
     fun stop() {
+        tripSkipped.clear()
         generation++
         requestPending = false
         matcher = null; previewMatcher = null; guidance = null; selectionOrigin = null; reroute.resetSamples(); arrival.reset()
@@ -135,7 +170,7 @@ class NavigationViewModel(
         if (origin != null && position != null && distanceMeters(origin, position) > RESELECT_DISTANCE_METERS) {
             // The options were planned from elsewhere: refresh them visibly instead of silently driving another path.
             requestPending = true
-            _state.value = NavigationState(NavigationPhase.WAITING_POSITION, target, waitingForGps = !hasAccurateFix())
+            _state.value = NavigationState(NavigationPhase.WAITING_POSITION, target, waitingForGps = !hasAccurateFix(), trip = current.trip)
             tryCalculate()
             return
         }
@@ -188,6 +223,12 @@ class NavigationViewModel(
             snappedPosition = snapped(fix.point, onLine),
             speedKmh = fix.speedMetersPerSecond.takeIf { it.isFinite() && it >= 0 }?.let { (it * 3.6).roundToInt() })
         if (arrival.update(fix, match, current.destination!!, now())) {
+            val leg = current.trip
+            if (leg != null) {
+                trips.markVisited(leg.tripId, leg.pointIndex)
+                val trip = trips.get(leg.tripId)
+                if (trip != null && startLeg(trip, current.destination, continuing = true)) return
+            }
             generation++
             _state.value = _state.value.copy(phase = NavigationPhase.ARRIVED, isRerouting = false, message = null, failure = null,
                 remainingMeters = 0.0, remainingSeconds = 0.0, progressMeters = match.totalMeters, upcomingManeuver = null, maxSpeedKmh = null,
@@ -235,8 +276,11 @@ class NavigationViewModel(
                     return@launch
                 }
                 selectionOrigin = origin
+                // The next trip point is driven at once: the driver already chose the trip.
+                if (current.trip?.continuing == true) { activate(route, target); return@launch }
                 _state.value = NavigationState(NavigationPhase.SELECTING, target, route, route.distanceMeters,
-                    route.estimatedDurationSeconds, waitingForGps = !hasAccurateFix(), options = listOf(route), searchingAlternatives = true)
+                    route.estimatedDurationSeconds, waitingForGps = !hasAccurateFix(), options = listOf(route), searchingAlternatives = true,
+                    trip = current.trip)
                 withTimeoutOrNull((ALTERNATIVES_BUDGET_MS - (now() - started)).coerceAtLeast(1)) {
                     for (index in 1..MAX_ALTERNATIVES) {
                         val alternative = try { engine.route(origin, target, index) } catch (e: CancellationException) { throw e } catch (_: Exception) { break }
@@ -273,7 +317,7 @@ class NavigationViewModel(
         val details = lastReceivedFix?.let { previewDetails(it) } ?: guidance!!.at(0.0)
         reroute.resetSamples(); arrival.reset()
         _state.value = NavigationState(NavigationPhase.ACTIVE, target, route, matcher!!.totalMeters,
-            route.estimatedDurationSeconds, waitingForGps = !hasAccurateFix(),
+            route.estimatedDurationSeconds, waitingForGps = !hasAccurateFix(), trip = _state.value.trip,
             upcomingManeuver = details.upcomingManeuver, maxSpeedKmh = details.maxSpeedKmh,
             arrivalAtMillis = arrivalAt(route.estimatedDurationSeconds))
     }
