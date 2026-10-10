@@ -8,6 +8,7 @@
 <full-backup-content>
     <exclude domain="sharedpref" path="auth_prefs.xml" />
     <exclude domain="sharedpref" path="LocationServicePrefs.xml" />
+    <exclude domain="sharedpref" path="home_prefs.xml" />
     <exclude domain="file" path="gpx/" />
     <exclude domain="file" path="maps/" />
         <exclude domain="file" path="routing/" />

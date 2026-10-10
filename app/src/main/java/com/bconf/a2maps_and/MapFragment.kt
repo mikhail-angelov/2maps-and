@@ -11,6 +11,8 @@ import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.view.doOnLayout
 import androidx.core.view.isInvisible
 import androidx.core.view.isVisible
+import com.bconf.a2maps_and.home.HomeLayerManager
+import com.bconf.a2maps_and.home.HomeStore
 import com.bconf.a2maps_and.navigation.*
 import android.annotation.SuppressLint
 import android.content.Context
@@ -28,6 +30,7 @@ import android.view.ViewGroup
 import android.view.animation.AccelerateDecelerateInterpolator
 import android.widget.PopupWindow
 import android.widget.TextView
+import android.widget.Toast
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.Lifecycle
@@ -104,6 +107,9 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
     private var fabRadialRecord: FloatingActionButton? = null
     private var fabRadialFollowRecord: FloatingActionButton? = null
     private var fabCompass: FloatingActionButton? = null
+    private var fabHome: FloatingActionButton? = null
+    private val homeStore by lazy { HomeStore(requireContext()) }
+    private var homeLayerManager: HomeLayerManager? = null
     private var trackStatsText: TextView? = null
     private var isRadialMenuOpen = false
     private val radialMenuAnimDuration = 200L
@@ -133,6 +139,7 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         internal var layoutResId = R.layout.fragment_map
         private const val ID_MENU_NAVIGATE = 1
         private const val ID_MENU_ADD_PLACEMARK = 2
+        private const val ID_MENU_SET_HOME = 3
         private const val DEFAULT_LOCATION_LAT = 56.292374
         private const val DEFAULT_LOCATION_LNG = 43.985402
         private const val INITIAL_PLACEMARK_SENTINEL = 999.0F
@@ -200,6 +207,7 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         fabRadialRecord = view.findViewById(R.id.fabRadialRecord)
         fabRadialFollowRecord = view.findViewById(R.id.fabRadialFollowRecord)
         fabCompass = view.findViewById(R.id.fabCompass)
+        fabHome = view.findViewById(R.id.fabHome)
         mainMenuButton = view.findViewById(R.id.mainMenuButton)
         trackStatsText = view.findViewById(R.id.trackStatsText)
     }
@@ -229,6 +237,7 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
                         gasLayerManager.onStyleLoaded(style)
                         trackLayerManager.setupTrackLayer(style)
                         routeLayerManager.onStyleLoaded(style)
+                        homeLayerManager?.onStyleLoaded(style)
                         locationViewModel.lastKnownGpsLocation.value?.let { updateCurrentLocationIndicatorAndCamera(it) }
                     }
                 }
@@ -276,6 +285,17 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
             }
             true
         }
+
+        fabHome?.setOnClickListener {
+            val home = homeStore.home
+            if (home == null) {
+                Toast.makeText(requireContext(), R.string.home_hint, Toast.LENGTH_LONG).show()
+            } else {
+                navigationViewModel.start(home)
+                if (!navigationViewModel.hasPrecisePermission()) requestPreciseLocation()
+            }
+        }
+        renderHome()
 
         fabRadialFollow?.setOnClickListener { selectLocationMode(LocationMode.FOLLOW) }
         fabRadialRecord?.setOnClickListener { selectLocationMode(LocationMode.RECORD) }
@@ -379,6 +399,12 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         }
     }
 
+    private fun renderHome() {
+        val home = homeStore.home
+        fabHome?.alpha = if (home == null) 0.5f else 1f
+        homeLayerManager?.show(home)
+    }
+
     /** Resumes following the car after a map gesture; while navigating the bottom panel is the re-centre control. */
     private fun recenterOnCar() {
         if (!navigationViewModel.state.value.needsGps) return
@@ -421,6 +447,7 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         // Browsing chrome competes with the guidance cards; invisible keeps the compass anchored below the menu.
         mainMenuButton?.isInvisible = navigating
         fabCenterOnLocation?.isVisible = !navigating
+        fabHome?.isVisible = !navigating
         fabToggleGasLayer?.isVisible = !navigating && !isRadialMenuOpen
         fabHideTrack?.isVisible = !navigating && trackViewModel.trackPoints.value.isNotEmpty() &&
             !locationViewModel.locationMode.value.isRecording()
@@ -551,6 +578,7 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         ) { _ ->
             mapView.showContextMenu()
         }
+        homeLayerManager = HomeLayerManager(requireContext()).also { it.show(homeStore.home) }
         trackLayerManager = TrackLayerManager(
             requireContext(), map, trackViewModel,
             viewLifecycleOwner.lifecycle,
@@ -563,6 +591,7 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
             gasLayerManager.onStyleLoaded(style)
             trackLayerManager.setupTrackLayer(style)
             routeLayerManager.onStyleLoaded(style)
+            homeLayerManager?.onStyleLoaded(style)
             focusInitialPlacemark()
         })
     }
@@ -893,6 +922,8 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
         if (::gasLayerManager.isInitialized) gasLayerManager.cleanup()
         if (::trackLayerManager.isInitialized) trackLayerManager.cleanup()
         routeLayerManager.cleanup()
+        homeLayerManager?.cleanup()
+        homeLayerManager = null
         navigationPanel = null
         navigationLayoutActive = null
         scaleBar = null
@@ -931,6 +962,7 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
             menu.setHeaderTitle("Actions")
             menu.add(0, ID_MENU_NAVIGATE, 0, "Navigate to")
             menu.add(0, ID_MENU_ADD_PLACEMARK, 0, "Add Placemark")
+            menu.add(0, ID_MENU_SET_HOME, 0, R.string.home_set)
         }
     }
 
@@ -942,6 +974,14 @@ class MapFragment : Fragment(), MapLibreMap.OnMapLongClickListener, MapLibreMap.
                         navigationViewModel.start(GeoPoint(coords.latitude, coords.longitude))
                         if (!navigationViewModel.hasPrecisePermission()) requestPreciseLocation()
                     }
+                    return true
+                }
+
+                ID_MENU_SET_HOME -> {
+                    // A single Home: the new point replaces the previous one.
+                    homeStore.home = GeoPoint(coords.latitude, coords.longitude)
+                    renderHome()
+                    Toast.makeText(requireContext(), R.string.home_saved, Toast.LENGTH_SHORT).show()
                     return true
                 }
 
