@@ -218,7 +218,7 @@ class NavigationPanel(
         routeProgress.isVisible = tracking
         if (tracking) {
             // Fraction of the same geometry the matcher measures; BRouter's own length estimate is not mixed in.
-            val along = state.progressMeters ?: 0.0
+            val along = state.drivenMeters + (state.progressMeters ?: 0.0)
             val total = along + state.remainingMeters
             val fraction = if (state.phase == NavigationPhase.ARRIVED) 1.0 else if (total > 0) along / total else 0.0
             routeProgress.fraction = fraction.toFloat()

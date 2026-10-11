@@ -28,8 +28,8 @@
     <string name="trips_delete">Delete</string>
     <string name="trips_cancel">Cancel</string>
     <string name="navigation_rerouting">Recalculating route…</string>
-    <string name="navigation_maneuver_meters">%1$d m</string>
-    <string name="navigation_maneuver_km">%1$.1f km</string>
+    <string name="navigation_maneuver_meters">%1$d\u00A0m</string>
+    <string name="navigation_maneuver_km">%1$.1f\u00A0km</string>
     <string name="navigation_straight">Continue straight</string>
     <string name="navigation_left">Turn left</string>
     <string name="navigation_slight_left">Slight left</string>
@@ -49,8 +49,8 @@
     <string name="navigation_finish">End of route</string>
     <string name="navigation_stale">Route may be outdated</string>
     <string name="navigation_go">Go</string>
-    <string name="navigation_minutes">%1$d min</string>
-    <string name="navigation_hours_minutes">%1$d h %2$02d min</string>
+    <string name="navigation_minutes">%1$d\u00A0min</string>
+    <string name="navigation_hours_minutes">%1$d\u00A0h %2$02d\u00A0min</string>
     <string name="navigation_preview">Route preview</string>
     <string name="navigation_position_stale">Position is not updating</string>
     <string name="navigation_searching_alternatives">Looking for alternatives…</string>

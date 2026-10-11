@@ -88,7 +88,7 @@ class MapFragmentRobolectricTest {
                 upcomingManeuver = UpcomingManeuver(RouteManeuver(1, ManeuverType.RIGHT), 347.0), maxSpeedKmh = 60,
                 progressMeters = 8050.0, arrivalAtMillis = 0L, speedKmh = 54)
             panel.render(driving, true)
-            assertTrue(root.findViewById<TextView>(R.id.navigationSummary).text.toString().startsWith("350 m"))
+            assertTrue(root.findViewById<TextView>(R.id.navigationSummary).text.toString().startsWith("350\u00A0m"))
             assertEquals(View.VISIBLE, root.findViewById<View>(R.id.navigationRouteProgress).visibility)
             val speed = root.findViewById<TextView>(R.id.navigationCurrentSpeed)
             assertEquals("54", speed.text.toString())
@@ -100,7 +100,7 @@ class MapFragmentRobolectricTest {
             assertEquals(View.VISIBLE, speed.visibility)
             panel.render(driving, true)
             assertEquals(View.VISIBLE, root.findViewById<View>(R.id.navigationManeuverCard).visibility)
-            assertEquals("350 m", root.findViewById<TextView>(R.id.navigationManeuverDistance).text.toString())
+            assertEquals("350\u00A0m", root.findViewById<TextView>(R.id.navigationManeuverDistance).text.toString())
             assertEquals("60", root.findViewById<TextView>(R.id.navigationSpeedLimit).text.toString())
             assertEquals(View.GONE, root.findViewById<View>(R.id.navigationGo).visibility)
             assertEquals(View.VISIBLE, root.findViewById<View>(R.id.navigationStop).visibility)

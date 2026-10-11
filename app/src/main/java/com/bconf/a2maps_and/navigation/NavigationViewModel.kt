@@ -43,6 +43,8 @@ class NavigationViewModel(
     private val arrival = ArrivalDetection()
     private var selectionOrigin: GeoPoint? = null
     private var snapSteps = 0
+    /** The last automatic reroute started at a road away from the car: it is off the road network. */
+    private var offRoad = false
     private val trips = TripStore(application)
     /** Trip points skipped during this drive; they stay unvisited in the saved trip. */
     private val tripSkipped = mutableSetOf<Int>()
@@ -100,6 +102,7 @@ class NavigationViewModel(
         generation++
         requestPending = true
         matcher = null; previewMatcher = null; guidance = null; selectionOrigin = null; lastSample = 0; reroute.resetSamples(); arrival.reset()
+        offRoad = false
         _state.value = NavigationState(NavigationPhase.WAITING_POSITION, destination, waitingForGps = true, trip = trip)
         calculationJob?.cancel()
         tryCalculate()
@@ -212,6 +215,7 @@ class NavigationViewModel(
         val match = matcher!!.match(fix)
         val details = detailsFor(match, fix.accuracyMeters)
         val onRoute = match.crossTrackMeters <= corridor(fix.accuracyMeters)
+        if (onRoute) offRoad = false
         // Off-route samples keep the last confirmed progress instead of projecting onto a far segment.
         val progress = if (onRoute) match.alongMeters else current.progressMeters
         val remaining = progress?.let { (match.totalMeters - it).coerceAtLeast(0.0) } ?: current.remainingMeters
@@ -222,7 +226,8 @@ class NavigationViewModel(
             upcomingManeuver = details.upcomingManeuver, maxSpeedKmh = details.maxSpeedKmh,
             snappedPosition = snapped(fix.point, onLine),
             speedKmh = fix.speedMetersPerSecond.takeIf { it.isFinite() && it >= 0 }?.let { (it * 3.6).roundToInt() })
-        if (arrival.update(fix, match, current.destination!!, now())) {
+        // Arrive where the drive ends: a field or square can lie well away from the road the route stops at.
+        if (arrival.update(fix, match, current.route.points.last(), now())) {
             val leg = current.trip
             if (leg != null) {
                 trips.markVisited(leg.tripId, leg.pointIndex)
@@ -251,19 +256,27 @@ class NavigationViewModel(
         // Planning without a driven route offers choices; rerouting while driving replaces the route directly.
         val selecting = current.route == null
         val course = latestFix?.courseDegrees
+        val originAccuracy = latestFix?.accuracyMeters ?: 0.0
+        // The part driven so far stays in the progress bar when the route is replaced.
+        val driven = current.drivenMeters + (current.progressMeters ?: 0.0)
         busy = true
         requestPending = false
         reroute.started(now())
+        // Off-road checks run quietly: the route on screen stays valid until a road is reached.
         _state.value = current.copy(phase = if (selecting) NavigationPhase.CALCULATING else NavigationPhase.ACTIVE,
-            isRerouting = !selecting, waitingForGps = false, message = null, failure = null)
+            isRerouting = !selecting && !offRoad, waitingForGps = false, message = null, failure = null)
         calculationJob = viewModelScope.launch {
             try {
                 val started = now()
                 val route = engine.route(origin, target, 0)
                 if (token != generation) return@launch
                 if (!selecting) {
+                    // Off the road network every new route starts at the nearest road, as the current one leads there:
+                    // keep it until the car is on a road again. A retry the driver asked for is always taken.
+                    offRoad = !explicitRequest && distanceMeters(origin, route.points.first()) > corridor(originAccuracy)
+                    if (offRoad) { _state.value = _state.value.copy(isRerouting = false); return@launch }
                     // The main route is driven at once; extra candidates may only replace it when it turns the car back.
-                    activate(route, target)
+                    activate(route, target, driven)
                     if (!RerouteSelector.canImprove(route, course)) return@launch
                     val candidates = mutableListOf(route)
                     withTimeoutOrNull((ALTERNATIVES_BUDGET_MS - (now() - started)).coerceAtLeast(1)) {
@@ -272,7 +285,7 @@ class NavigationViewModel(
                         }
                     }
                     val best = RerouteSelector.select(candidates, course)
-                    if (best != 0 && token == generation && _state.value.phase == NavigationPhase.ACTIVE) activate(candidates[best], target)
+                    if (best != 0 && token == generation && _state.value.phase == NavigationPhase.ACTIVE) activate(candidates[best], target, driven)
                     return@launch
                 }
                 selectionOrigin = origin
@@ -309,7 +322,7 @@ class NavigationViewModel(
         }
     }
 
-    private fun activate(route: Route, target: GeoPoint) {
+    private fun activate(route: Route, target: GeoPoint, driven: Double = 0.0) {
         matcher = RouteProgressMatcher(route)
         previewMatcher = RouteProgressMatcher(route)
         guidance = RouteGuidance(route)
@@ -319,7 +332,7 @@ class NavigationViewModel(
         _state.value = NavigationState(NavigationPhase.ACTIVE, target, route, matcher!!.totalMeters,
             route.estimatedDurationSeconds, waitingForGps = !hasAccurateFix(), trip = _state.value.trip,
             upcomingManeuver = details.upcomingManeuver, maxSpeedKmh = details.maxSpeedKmh,
-            arrivalAtMillis = arrivalAt(route.estimatedDurationSeconds))
+            arrivalAtMillis = arrivalAt(route.estimatedDurationSeconds), drivenMeters = driven)
     }
 
     /** Eases the drawn position onto the route over a few fixes, so entering guidance does not jump across the road. */
