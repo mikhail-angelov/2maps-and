@@ -97,6 +97,8 @@ data class NavigationState(
     val searchingAlternatives: Boolean = false,
     /** Distance along the route geometry confirmed by an accurate on-route fix; null until the first one. */
     val progressMeters: Double? = null,
+    /** Distance driven on the routes this one replaced by rerouting, so the progress bar keeps the drive's tail. */
+    val drivenMeters: Double = 0.0,
     /** Wall-clock arrival estimate; frozen while the position is stale. */
     val arrivalAtMillis: Long? = null,
     /** Current GPS speed while guiding; null when unknown. */

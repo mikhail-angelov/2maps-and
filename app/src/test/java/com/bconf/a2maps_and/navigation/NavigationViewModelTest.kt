@@ -234,6 +234,36 @@ class NavigationViewModelTest {
         assertSame(back, vm.state.value.route)
         assertEquals(2, pending.size)
     }
+    @Test fun `reroute keeps the distance driven so far`() {
+        good(); vm.start(b); dispatcher.scheduler.runCurrent()
+        pending[0].complete(route()); dispatcher.scheduler.runCurrent()
+        go()
+        time += 1000; good(GeoPoint((a.latitude + b.latitude) / 2, (a.longitude + b.longitude) / 2))
+        val driven = vm.state.value.progressMeters!!
+        assertTrue(driven > 500)
+        for (t in listOf(11000L, 12000L, 13000L, 14000L)) { time = t; good(c) }
+        pending[1].complete(Route(listOf(c, b), b, 1500.0, 120.0)); dispatcher.scheduler.runCurrent()
+        assertEquals(driven, vm.state.value.drivenMeters, 0.001)
+        assertNull(vm.state.value.progressMeters)
+    }
+    @Test fun `off the road network the route is kept until a road is reached`() {
+        good(); vm.start(b); dispatcher.scheduler.runCurrent()
+        val planned = route()
+        pending[0].complete(planned); dispatcher.scheduler.runCurrent()
+        go()
+        for (t in listOf(11000L, 12000L, 13000L, 14000L)) { time = t; good(c) }
+        // In a field: the nearest road is 200 m away, so the new route would start there just as the planned one leads.
+        pending[1].complete(Route(listOf(GeoPoint(c.latitude - 0.0018, c.longitude), b), b, 1500.0, 120.0)); dispatcher.scheduler.runCurrent()
+        assertSame(planned, vm.state.value.route)
+        assertFalse(vm.state.value.isRerouting)
+        // Later checks stay quiet until one starts at the car: it has reached a road.
+        for (t in listOf(25000L, 26000L, 27000L, 28000L)) { time = t; good(c) }
+        assertEquals(3, pending.size)
+        assertFalse(vm.state.value.isRerouting)
+        val fromRoad = Route(listOf(c, b), b, 1500.0, 120.0)
+        pending[2].complete(fromRoad); dispatcher.scheduler.runCurrent()
+        assertSame(fromRoad, vm.state.value.route)
+    }
     @Test fun `position arrow eases onto the route inside the corridor and is raw outside`() {
         good(); vm.start(b); dispatcher.scheduler.runCurrent()
         pending[0].complete(route()); dispatcher.scheduler.runCurrent()
@@ -312,6 +342,15 @@ class NavigationViewModelTest {
         assertEquals(2, vm.state.value.trip?.number)
         vm.skipTripPoint(); dispatcher.scheduler.runCurrent()
         assertEquals(NavigationPhase.IDLE, vm.state.value.phase)
+    }
+    @Test fun `destination away from the road is reached where the route ends`() {
+        // A field or square: the route stops at the nearest road about 200 m short of the point.
+        val roadEnd = GeoPoint(b.latitude - 0.0018, b.longitude)
+        good(a); vm.start(b); dispatcher.scheduler.runCurrent()
+        pending[0].complete(Route(listOf(a, roadEnd), b, 1300.0, 100.0)); dispatcher.scheduler.runCurrent()
+        go()
+        repeat(3) { time += 1000; good(roadEnd) }
+        assertEquals(NavigationPhase.ARRIVED, vm.state.value.phase)
     }
     @Test fun `Go stops the alternative search and a new destination ignores late alternatives`() {
         offerAlternatives = true
