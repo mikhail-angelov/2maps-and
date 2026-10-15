@@ -7,6 +7,15 @@
             android:text="@string/road_data_title" android:textSize="22sp" android:layout_marginBottom="12dp" />
         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
             android:text="@string/road_data_help" android:textSize="16sp" />
+        <TextView android:id="@+id/roadDataRegion" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:layout_marginTop="16dp" android:textSize="16sp" />
+        <Button android:id="@+id/downloadRoadData" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:text="@string/road_data_download_nearby" />
+        <ProgressBar android:id="@+id/roadDataProgress" style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:max="100" android:visibility="gone" />
+        <Button android:id="@+id/cancelRoadDataDownload" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:text="@string/road_data_cancel" android:visibility="gone" />
         <Button android:id="@+id/importRoadData" android:layout_width="match_parent"
             android:layout_height="wrap_content" android:text="@string/road_data_import" />
         <TextView android:id="@+id/roadDataStatus" android:layout_width="match_parent"

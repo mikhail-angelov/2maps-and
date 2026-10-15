@@ -141,6 +141,20 @@ class OfflineNavigationTest {
         }
     }
 
+    @Test fun importedRoadDataStillRoutesAfterTheSourceFileIsDeleted() = runBlocking {
+        val data = RoutingDataStore(context)
+        val selected = File(context.cacheDir, "road-data-import-test/E40_N55.rd5")
+        selected.parentFile!!.mkdirs()
+        try {
+            File(data.directory, selected.name).copyTo(selected, overwrite = true)
+            selected.inputStream().use { data.importSegment(selected.name, it) }
+            assertTrue(selected.delete())
+            assertTrue(RoutingDataStore(context).segments().any { it.name == selected.name })
+            val route = LocalRoutingClient(context).route(origin, target, 0)
+            assertTrue(route.distanceMeters > 100)
+        } finally { selected.delete(); selected.parentFile!!.delete() }
+    }
+
     @Test fun mapShowsRealRouteReroutesSurvivesStyleAndRecreationAndPreservesRecording() {
         requireRoadData()
         val imported = File(context.filesDir, "maps/integration-map.mbtiles")

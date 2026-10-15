@@ -8,13 +8,20 @@ arrival/reroute policy, maneuvers and map layers are reused.
 
 ## Setup
 
-1. Obtain road data `.rd5` files for the regions you travel through. Official
-   files: https://brouter.de/brouter/segments4/ . Nizhny Novgorod uses
+1. Open **Menu → Road data → Download for my location**. The app uses the last
+   known map position to select the current five-degree region. You can also
+   select neighbouring regions before starting the download; only the current
+   one is selected by default. Downloads show progress and can be cancelled.
+   The app must stay running; leaving the Road data screen cancels its download.
+   Official files: https://brouter.de/brouter/segments4/ . Nizhny Novgorod uses
    `E40_N55.rd5`; routes east of 45° longitude may also need `E45_N55.rd5`.
-2. Open **Menu → Road data → Import .rd5 files** and select one or more files.
+2. Alternatively, open **Menu → Road data → Import .rd5 files** and select one or more files.
    Imports validate names and file integrity, then replace files atomically.
    Road data is stored in private `filesDir/routing/segments4`. Existing files
-   survive failed imports. Profiles/lookups are installed from bundled assets.
+   survive failed imports/downloads. Both methods copy the bytes into app storage,
+   rather than keeping links to Downloads. Once import finishes successfully,
+   deleting the original files or clearing Downloads does not affect routing.
+   Profiles/lookups are installed from bundled assets.
 3. Import a `.mbtiles` basemap through **Maps** when needed. Road graph files
    and map tiles serve different purposes. The built-in basemap covers Malta.
 4. Long press the map or open a placemark and choose **Navigate to → Offline**.

@@ -219,3 +219,26 @@ local placemarks/tracks were preserved by the signed update.
 
 The external/early MVP checks above are historical. The current setup is described
 in README.md; architecture and focused follow-ups are in ARCHITECTURE.md.
+
+## Road-data downloads and private import — 2026-10-15
+
+Branch: `feature/road-data-downloads`. Signed local build
+`0.0.8-road-data` (code 29) installed over the phone's existing 0.0.8 installation.
+JVM tests: 115 debug + 113 release, zero failures; lint, release assembly and
+Android-test compilation passed.
+
+Huawei EVE-LX9N / Android 10 manual acceptance:
+
+- Last known position selected E40_N55, with neighbouring regions offered and
+  only the current region checked by default.
+- Actual download progress and cancellation worked; old road data remained listed.
+- Downloading E40_N55 from the official server completed into private app storage.
+- Imported a real E40_N55 through the Android document picker from an isolated
+  test folder in Downloads; the UI confirmed copying into app storage.
+- Deleted that test source file and its folder, force-stopped and relaunched
+  2Maps. Offline routing still offered alternatives for a 1.1 km / 4 minute route.
+- Go entered guidance and displayed a left turn in 40 m; Stop ended navigation.
+
+Only task-created temporary files were removed. The user's maps and existing
+road data were retained. JVM regressions also cover HTTP errors, corrupt
+responses, negative/dateline region coordinates and cancellation before publication.

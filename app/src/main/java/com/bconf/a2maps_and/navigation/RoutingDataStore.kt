@@ -16,12 +16,13 @@ class RoutingDataStore(private val context: Context) {
     fun segments(): List<RoadSegment> = directory.listFiles()?.filter { validName(it.name) != null }?.sortedBy { it.name }
         ?.map { RoadSegment(it.name, it.length()) }.orEmpty()
 
-    fun importSegment(name: String, input: InputStream): RoadSegment {
+    fun importSegment(name: String, input: InputStream, checkCancelled: () -> Unit = {}): RoadSegment {
         val safeName = validName(name) ?: throw IllegalArgumentException("Choose a road data file such as E40_N55.rd5.")
         val temporary = File.createTempFile("segment-", ".tmp", directory)
         try {
             temporary.outputStream().use { output -> input.copyTo(output) }
             if (PhysicalFile.checkFileIntegrity(temporary) != null) throw IOException("Road data file is corrupt or incompatible.")
+            checkCancelled()
             val destination = File(directory, safeName)
             Files.move(temporary.toPath(), destination.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
             return RoadSegment(destination.name, destination.length())
